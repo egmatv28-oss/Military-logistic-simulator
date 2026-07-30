@@ -681,11 +681,14 @@ class UnitRenderer:
         ts = self.r.tsize
         cx, cy = px + ts // 2, py + ts // 2
         # Flying FPV: small shape with trail line from operator
-        ops = [u for u in game.all_units if isinstance(u, FPVOperator) and u.is_alive and u.faction == unit.faction]
-        if ops:
-            closest = min(ops, key=lambda o: abs(o.x - unit.x) + abs(o.y - unit.y))
-            opx = closest.x * ts + ts // 2 + self.r.camera_x
-            opy = closest.y * ts + ts // 2 + self.r.camera_y
+        op = unit.operator if unit.operator and unit.operator.is_alive else None
+        if not op:
+            ops = [u for u in game.all_units if isinstance(u, FPVOperator) and u.is_alive and u.faction == unit.faction]
+            if ops:
+                op = min(ops, key=lambda o: abs(o.x - unit.x) + abs(o.y - unit.y))
+        if op:
+            opx = op.x * ts + ts // 2 + self.r.camera_x
+            opy = op.y * ts + ts // 2 + self.r.camera_y
             color = (200, 50, 200, 80) if unit.faction == config.PLAYER else (200, 100, 50, 80)
             pygame.draw.line(self.r.screen, color, (opx, opy), (cx, cy), max(1, ts // 20))
 

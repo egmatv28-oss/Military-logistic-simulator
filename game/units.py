@@ -1314,7 +1314,9 @@ class ReconDrone(Unit):
 
 
 class FPVDrone(Unit):
-    def __init__(self, x, y, faction, target, name="FPV-дрон"):
+    MAX_AGE = 10
+
+    def __init__(self, x, y, faction, target, name="FPV-дрон", operator=None):
         super().__init__(x, y, config.FPV_DRONE, faction, name)
         self.target = target
         self.speed = config.FPV_MOVE_SPEED
@@ -1324,13 +1326,12 @@ class FPVDrone(Unit):
         self.shot_down = False
         self.hit_target = False
         self.moved = False
+        self.age = 0
+        self.operator = operator
 
     @property
     def vision_range(self):
         return 2
-
-    def get_movement_cost(self, terrain):
-        return 1  # Дрон летает - стоимость всегда 1
 
     def get_movement_cost(self, terrain):
         return 1

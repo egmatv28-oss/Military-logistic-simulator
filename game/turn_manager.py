@@ -51,8 +51,21 @@ class TurnManager:
         g = self.game
         self._auto_resupply_units()
         self._create_fpv_drones()
-        for drone in g.fpv_drones_in_flight:
-            if drone.is_alive and not drone.moved:
+
+        for drone in list(g.fpv_drones_in_flight):
+            if not drone.is_alive:
+                self._cleanup_dead_drone(drone)
+                continue
+            if not drone.target or not drone.target.is_alive:
+                drone.die()
+                self._cleanup_dead_drone(drone)
+                continue
+            drone.age += 1
+            if drone.age > FPVDrone.MAX_AGE:
+                drone.die()
+                self._cleanup_dead_drone(drone)
+                continue
+            if not drone.moved:
                 drone.move_toward_target(g.map)
                 if drone.reached:
                     g.message = f"{drone.name} достиг цели!"
@@ -219,8 +232,21 @@ class TurnManager:
 
     def _resolve_fpv_attacks(self):
         g = self.game
+        seen = set()
+        deduped = []
+        for d in g.fpv_drones_in_flight:
+            if id(d) not in seen:
+                seen.add(id(d))
+                deduped.append(d)
+        g.fpv_drones_in_flight = deduped
+
         for drone in list(g.fpv_drones_in_flight):
-            if not drone.is_alive or not drone.target:
+            if not drone.is_alive:
+                self._cleanup_dead_drone(drone)
+                continue
+            if not drone.target or not drone.target.is_alive:
+                drone.die()
+                self._cleanup_dead_drone(drone)
                 continue
             if drone.reached and not drone.attacked:
                 drone.try_attack(g.map, g.combat_log, lambda msg: setattr(g, 'message', msg))
@@ -238,23 +264,23 @@ class TurnManager:
 
     def _create_fpv_drones(self):
         g = self.game
-        for unit in g.all_units:
-            if not isinstance(unit, FPVOperator) or not unit.is_alive:
-                continue
-            if not getattr(unit, 'auto_mode', False):
-                continue
-            if unit.fpv_stock <= 0:
-                continue
 
+        def _operator_has_drone_in_flight(op):
+            return any(
+                d.is_alive and d.operator is op and not d.attacked
+                for d in g.fpv_drones_in_flight
+            )
+
+        operators = [u for u in g.all_units
+                     if isinstance(u, FPVOperator) and u.is_alive
+                     and getattr(u, 'auto_mode', False) and u.fpv_stock > 0
+                     and not getattr(u, '_fpv_launched_this_turn', False)
+                     and not _operator_has_drone_in_flight(u)]
+
+        for unit in operators:
             faction = unit.faction
             enemy_faction = config.ENEMY if faction == config.PLAYER else config.PLAYER
             friendly_units = g.player_units if faction == config.PLAYER else g.enemy_units
-            enemy_units = g.enemy_units if faction == config.PLAYER else g.player_units
-            launched_key = f'fpv_launched_{faction}'
-            if not hasattr(g, launched_key):
-                setattr(g, launched_key, 0)
-            if getattr(g, launched_key) >= config.FPV_MAX_PER_TURN:
-                continue
 
             recon_drones = [d for d in g.all_units if isinstance(d, ReconDrone) and d.is_alive and d.faction == faction and not d.jammed]
 
@@ -264,7 +290,7 @@ class TurnManager:
             for enemy in g.all_units:
                 if enemy.faction != enemy_faction or not enemy.is_alive:
                     continue
-                if not isinstance(enemy, (Infantry, Tank)):
+                if isinstance(enemy, (ReconDrone, FPVDrone)):
                     continue
                 cell = g.map.get_cell(enemy.x, enemy.y)
                 if not cell:
@@ -303,12 +329,12 @@ class TurnManager:
             target = priority_target or fallback_target
             if target:
                 if unit.launch_fpv():
-                    fpv = FPVDrone(unit.x, unit.y, faction, target, f"FPV-{unit.name}")
+                    unit._fpv_launched_this_turn = True
+                    fpv = FPVDrone(unit.x, unit.y, faction, target, f"FPV-{unit.name}", operator=unit)
                     g.all_units.append(fpv)
                     friendly_units.append(fpv)
                     g.map.add_unit(fpv, unit.x, unit.y)
                     g.fpv_drones_in_flight.append(fpv)
-                    setattr(g, launched_key, getattr(g, launched_key) + 1)
                     g.message = f"{unit.name} запустил FPV по {target.name}"
 
     def _is_drone_detected(self, enemy_drone, friendly_drones):
@@ -537,8 +563,9 @@ class TurnManager:
     def end_turn(self):
         g = self.game
         g.fpv_launched_this_turn = 0
-        g.fpv_launched_0 = 0
-        g.fpv_launched_1 = 0
+        for u in g.all_units:
+            if isinstance(u, FPVOperator):
+                u._fpv_launched_this_turn = False
         if not g.fog_disabled:
             g.reveal_all_enemies = False
         for d in list(g.fpv_drones_in_flight):

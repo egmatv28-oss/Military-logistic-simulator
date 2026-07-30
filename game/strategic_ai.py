@@ -24,6 +24,9 @@ class StrategicAI:
         self.logistics_turns = 15  # Ходов на понимание логистики
         self.known_player_structures = []  # Известные склады/погреба игрока
         self.random_factor = 0.2  # 20% случайности в решениях
+        self.drone_targets = {}  # id(drone) -> (tx, ty) патрульная цель
+        self.drone_hover = {}  # id(drone) -> unit на котором зависает
+        self.drone_returning = {}  # id(drone) -> True дрон возвращается на базу
         
     def get_state(self):
         """Получить текущее состояние карты для принятия решений"""
@@ -193,6 +196,8 @@ class StrategicAI:
     
     def execute_actions(self, actions):
         """Выполнить принятые решения"""
+        self.cleanup_drone_state()
+        
         for action in actions:
             if action['type'] == 'deploy_recon':
                 self._execute_deploy_recon()
@@ -210,6 +215,8 @@ class StrategicAI:
                 self._execute_random_move()
             elif action['type'] == 'artillery_target':
                 self._execute_artillery_target()
+        
+        self._manage_drones()
     
     def _execute_deploy_recon(self):
         """Запустить разведдрон"""
@@ -227,6 +234,8 @@ class StrategicAI:
         if len(existing_drones) >= 3:
             return
         
+        player_base = self._get_player_base()
+        
         for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
             nx, ny = wh.x + dx, wh.y + dy
             cell = self.game.map.get_cell(nx, ny)
@@ -236,6 +245,12 @@ class StrategicAI:
                 self.game.enemy_units.append(drone)
                 self.game.map.add_unit(drone, nx, ny)
                 wh.batteries -= 5
+                if player_base and self.turn_count >= 10:
+                    patrol_x = player_base.x + random.randint(-5, 5)
+                    patrol_y = player_base.y + random.randint(-5, 5)
+                    patrol_x = max(0, min(self.game.map.width - 1, patrol_x))
+                    patrol_y = max(0, min(self.game.map.height - 1, patrol_y))
+                    self.drone_targets[id(drone)] = (patrol_x, patrol_y)
                 break
     
     def _execute_entrench(self):
@@ -319,7 +334,7 @@ class StrategicAI:
         for unit in self.game.all_units:
             if unit.faction != config.PLAYER or not unit.is_alive:
                 continue
-            if not isinstance(unit, (Infantry, Tank)):
+            if isinstance(unit, (ReconDrone, FPVDrone)):
                 continue
             cell = self.game.map.get_cell(unit.x, unit.y)
             if not cell:
@@ -362,7 +377,7 @@ class StrategicAI:
         if not op.launch_fpv():
             return
         
-        fpv_drone = FPVDrone(op.x, op.y, config.ENEMY, target, f"Вражеский FPV")
+        fpv_drone = FPVDrone(op.x, op.y, config.ENEMY, target, f"Вражеский FPV", operator=op)
         self.game.all_units.append(fpv_drone)
         self.game.enemy_units.append(fpv_drone)
         self.game.map.add_unit(fpv_drone, op.x, op.y)
@@ -546,6 +561,158 @@ class StrategicAI:
                 if hasattr(unit, 'fuel'):
                     unit.fuel -= 1
                 break
+
+    def _get_player_base(self):
+        """Получить базу (склад) игрока"""
+        for u in self.game.all_units:
+            if isinstance(u, Warehouse) and u.faction == config.PLAYER and u.is_alive:
+                return u
+        return None
+
+    def _get_enemy_warehouse(self):
+        """Получить свой склад"""
+        for u in self.game.all_units:
+            if isinstance(u, Warehouse) and u.faction == config.ENEMY and u.is_alive:
+                return u
+        return None
+
+    def _get_enemy_drones(self):
+        """Получить свои разведдроны"""
+        return [u for u in self.game.all_units
+                if isinstance(u, ReconDrone) and u.faction == config.ENEMY and u.is_alive]
+
+    def _move_drone_toward(self, drone, tx, ty, steps=5):
+        """Двигать дрон к точке (tx, ty) на steps шагов"""
+        for _ in range(steps):
+            dx = 0
+            if tx > drone.x:
+                dx = 1
+            elif tx < drone.x:
+                dx = -1
+            dy = 0
+            if ty > drone.y:
+                dy = 1
+            elif ty < drone.y:
+                dy = -1
+
+            nx, ny = drone.x + dx, drone.y + dy
+            if nx == drone.x and ny == drone.y:
+                break
+            nx = max(0, min(self.game.map.width - 1, nx))
+            ny = max(0, min(self.game.map.height - 1, ny))
+
+            self.game.map.remove_unit(drone)
+            drone.x, drone.y = nx, ny
+            self.game.map.add_unit(drone, nx, ny)
+
+    def _manage_drones(self):
+        """Управление разведдронами: разведка базы игрока, патрулирование, зависание над целью, возврат при низком заряде"""
+        if self.turn_count < 10:
+            return
+        drones = self._get_enemy_drones()
+        if not drones:
+            return
+
+        player_base = self._get_player_base()
+        own_base = self._get_enemy_warehouse()
+
+        for drone in drones:
+            drone_id = id(drone)
+
+            if drone.battery <= config.DRONE_LOW_BATTERY_THRESHOLD:
+                if own_base:
+                    self.drone_returning[drone_id] = True
+                    self.drone_hover.pop(drone_id, None)
+                    dist_to_base = abs(drone.x - own_base.x) + abs(drone.y - own_base.y)
+                    if dist_to_base <= 1:
+                        self.drone_returning.pop(drone_id, None)
+                        self.drone_targets.pop(drone_id, None)
+                    else:
+                        self._move_drone_toward(drone, own_base.x, own_base.y)
+                else:
+                    self.drone_targets.pop(drone_id, None)
+                    self.drone_hover.pop(drone_id, None)
+                    self.drone_returning.pop(drone_id, None)
+                continue
+
+            self.drone_returning.pop(drone_id, None)
+
+            if drone_id in self.drone_hover:
+                hover_target = self.drone_hover[drone_id]
+                if hover_target and hover_target.is_alive:
+                    dist = abs(drone.x - hover_target.x) + abs(drone.y - hover_target.y)
+                    if dist > 1:
+                        self._move_drone_toward(drone, hover_target.x, hover_target.y)
+                    continue
+                else:
+                    self.drone_hover.pop(drone_id, None)
+
+            spotted_enemy = None
+            for unit in self.game.all_units:
+                if unit.faction != config.PLAYER or not unit.is_alive:
+                    continue
+                if isinstance(unit, (ReconDrone,)):
+                    continue
+                dist = abs(drone.x - unit.x) + abs(drone.y - unit.y)
+                if dist <= drone.vision_range:
+                    cell = self.game.map.get_cell(unit.x, unit.y)
+                    if cell:
+                        stealth = self.game.map._get_stealth(unit, self.game.map) + self.game.map._cell_stealth_bonus(cell.terrain)
+                        detect_range = max(0, drone.vision_range - stealth)
+                        if dist <= detect_range:
+                            spotted_enemy = unit
+                            break
+
+            if spotted_enemy:
+                self.drone_hover[drone_id] = spotted_enemy
+                self.drone_targets.pop(drone_id, None)
+                dist = abs(drone.x - spotted_enemy.x) + abs(drone.y - spotted_enemy.y)
+                if dist > 1:
+                    self._move_drone_toward(drone, spotted_enemy.x, spotted_enemy.y)
+                continue
+
+            if drone_id not in self.drone_targets:
+                if player_base:
+                    patrol_x = player_base.x + random.randint(-5, 5)
+                    patrol_y = player_base.y + random.randint(-5, 5)
+                    patrol_x = max(0, min(self.game.map.width - 1, patrol_x))
+                    patrol_y = max(0, min(self.game.map.height - 1, patrol_y))
+                    self.drone_targets[drone_id] = (patrol_x, patrol_y)
+                else:
+                    patrol_x = random.randint(0, self.game.map.width - 1)
+                    patrol_y = random.randint(0, self.game.map.height - 1)
+                    self.drone_targets[drone_id] = (patrol_x, patrol_y)
+
+            target = self.drone_targets[drone_id]
+            dist_to_target = abs(drone.x - target[0]) + abs(drone.y - target[1])
+
+            if dist_to_target <= 1:
+                if player_base:
+                    patrol_x = player_base.x + random.randint(-8, 8)
+                    patrol_y = player_base.y + random.randint(-8, 8)
+                    patrol_x = max(0, min(self.game.map.width - 1, patrol_x))
+                    patrol_y = max(0, min(self.game.map.height - 1, patrol_y))
+                    self.drone_targets[drone_id] = (patrol_x, patrol_y)
+                else:
+                    patrol_x = random.randint(0, self.game.map.width - 1)
+                    patrol_y = random.randint(0, self.game.map.height - 1)
+                    self.drone_targets[drone_id] = (patrol_x, patrol_y)
+            else:
+                self._move_drone_toward(drone, target[0], target[1])
+
+    def cleanup_drone_state(self):
+        """Очистить состояние для уничтоженных дронов"""
+        alive_ids = {id(u) for u in self.game.all_units
+                     if isinstance(u, ReconDrone) and u.faction == config.ENEMY and u.is_alive}
+        for d in list(self.drone_targets):
+            if d not in alive_ids:
+                del self.drone_targets[d]
+        for d in list(self.drone_hover):
+            if d not in alive_ids:
+                del self.drone_hover[d]
+        for d in list(self.drone_returning):
+            if d not in alive_ids:
+                del self.drone_returning[d]
     
     def _is_occupied(self, x, y, exclude=None):
         """Проверить занята ли клетка"""
