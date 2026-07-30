@@ -1,0 +1,96 @@
+{
+  "infantry": {
+    "name": "Пехота",
+    "soldiers": 6,
+    "max_soldiers": 6,
+    "ammo": 30,
+    "max_ammo": 30,
+    "food": 100,
+    "max_food": 100,
+    "vision_range": 3,
+    "move_range": 2,
+    "attack_range": 1,
+    "attack_power": 3,
+    "entrench_rate": 10,
+    "max_entrenchment": 100
+  },
+  "tank": {
+    "name": "Танк",
+    "crew": 4,
+    "max_crew": 4,
+    "ammo": 15,
+    "max_ammo": 15,
+    "fuel": 30,
+    "max_fuel": 30,
+    "vision_range": 4,
+    "move_range": 3,
+    "attack_range": 2,
+    "attack_power": 30,
+    "armor": 50
+  },
+  "recon_drone": {
+    "name": "Разведдрон",
+    "battery": 15,
+    "max_battery": 15,
+    "vision_range": 6,
+    "move_range": 4,
+    "is_flying": true
+  },
+  "supply_truck": {
+    "name": "Грузовик",
+    "max_weight": 100,
+    "fuel": 15,
+    "max_fuel": 15,
+    "vision_range": 1,
+    "move_range": 2
+  },
+  "warehouse": {
+    "name": "Склад",
+    "supplies": 80,
+    "max_supplies": 200,
+    "ammo": 60,
+    "max_ammo": 150,
+    "fuel": 40,
+    "max_fuel": 100,
+    "batteries": 30,
+    "max_batteries": 80,
+    "fpv_drones": 5,
+    "vision_range": 2
+  },
+  "supply_cache": {
+    "name": "Погреб",
+    "max_slots": 30,
+    "supplies": 0,
+    "max_supplies": 200,
+    "ammo": 0,
+    "max_ammo": 100,
+    "fuel": 0,
+    "max_fuel": 60,
+    "batteries": 0,
+    "max_batteries": 30,
+    "fpv_drones": 0,
+    "vision_range": 1,
+    "build_required": 5
+  },
+  "fpv_operator": {
+    "name": "FPV-оператор",
+    "fpv_stock": 3,
+    "max_stock": 3,
+    "vision_range": 2,
+    "move_range": 1
+  },
+  "fpv_drone": {
+    "name": "FPV-дрон",
+    "speed": 3,
+    "vision_range": 2,
+    "hit_chance": 0.8,
+    "damage_infantry": 5,
+    "damage_armor": 30
+  },
+  "recon_operator": {
+    "name": "Оператор БПЛА",
+    "vision_range": 3,
+    "move_range": 1,
+    "radar_range": 8
+  }
+}
