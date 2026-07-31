@@ -418,12 +418,11 @@ class GameMap:
         self.player_warehouse = player_city
         
         # Базы врага
-        if len(cities) >= 3:
-            enemy_cities = cities[1:3]
+        if len(cities) >= 2:
+            enemy_cities = [cities[1]]
         else:
-            enemy_cities = [(self.width - 4, 3), (self.width - 4, self.height - 3)]
+            enemy_cities = [(self.width - 4, self.height // 2)]
             for ex, ey in enemy_cities:
-                # Ищем ближайшее здание
                 for r in range(4):
                     found = False
                     for dx in range(-r, r + 1):

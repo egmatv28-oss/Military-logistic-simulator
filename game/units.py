@@ -1355,7 +1355,7 @@ class FPVDrone(Unit):
             cell = game_map.get_cell(x, y)
             if cell:
                 for unit in cell.units:
-                    if unit.is_alive and unit.is_jammer:
+                    if unit.is_alive and getattr(unit, 'is_jammer', False):
                         if isinstance(unit, RadarEW):
                             penalty += 15
                         else:
@@ -1812,8 +1812,8 @@ class Warehouse:
         self.y = y
         self.faction = faction
         self.name = name
-        self.supplies = 80
-        self.max_supplies = 200
+        self.supplies = 1000
+        self.max_supplies = 2000
         self.ammo = 60
         self.max_ammo = 150
         self.fuel = 40
@@ -1845,7 +1845,7 @@ class Warehouse:
         self.alive = False
 
     def reinforce(self):
-        self.supplies = min(self.max_supplies, self.supplies + 40)
+        self.supplies = min(self.max_supplies, self.supplies + 500)
         self.ammo = min(self.max_ammo, self.ammo + 30)
         self.fuel = min(self.max_fuel, self.fuel + 20)
         self.batteries = min(self.max_batteries, self.batteries + 15)
