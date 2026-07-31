@@ -34,7 +34,7 @@ military_logistics_sim/
 │   ├── units.py                   ← ВСЕ классы юнитов: Soldier, Infantry, Tank,
 │   │                                  Artillery, ReconDrone, FPVDrone, FPVOperator,
 │   │                                  ReconOperator, SupplyTruck, SupplyCache,
-│   │                                  SoldierUnit, Warehouse.
+│   │                                  SoldierUnit, Warehouse, RadarEW.
 │   │
 │   ├── map_.py                    ← Карта: PerlinNoise, Cell, GameMap.
 │   │                                  Генерация, поиск пути (BFS), видимость.
@@ -246,6 +246,7 @@ game.controllers.ai_controller
 | `SupplyTruck` | 1366 | Грузовик (груз, маршрут, экипаж) |
 | `Warehouse` | (далее) | Склад (ресурсы, пополнение) |
 | `SupplyCache` | (далее) | Погреб (строящееся/построенное сооружение) |
+| `RadarEW` | 1139 | Радиоэлектронная борьба (РЭБ) |
 
 ### map_.py — карта и навигация
 | Что | Строка | Зачем |
@@ -573,23 +574,23 @@ class Game:
 
 | Файл | Строк | Роль |
 |---|---|---|
-| `game.py` | 571 | Фасад: состояние + делегирование |
-| `turn_manager.py` | 887 | Логика хода, фазы, подкрепления |
-| `supply_logistics.py` | 811 | Маршруты, склады, waypoints |
-| `action_manager.py` | 754 | Команды игрока |
-| `resource_transfer.py` | 630 | Передача ресурсов (диспетчер) |
-| `units.py` | 1761 | Все классы юнитов |
-| `ui_manager.py` | 849 | Обработка ввода |
-| `map_.py` | 532 | Карта, путь, видимость |
-| `combat.py` | 510 | Боевая система |
-| `strategic_ai.py` | 480 | Стратегический ИИ |
-| `renderer.py` | 129 | Фасад рендера |
-| `ui_panel_renderer.py` | 1210 | Панель UI |
-| `unit_renderer.py` | 574 | Отрисовка юнитов |
-| `map_renderer.py` | 520 | Отрисовка карты |
-| `esp_menu.py` | 574 | ESP-меню |
-| `game_config.py` | 264 | Все константы |
-| **TOTAL** | **~12200** | |
+| `game.py` | 511 | Фасад: состояние + делегирование |
+| `turn_manager.py` | 958 | Логика хода, фазы, подкрепления |
+| `supply_logistics.py` | 789 | Маршруты, склады, waypoints |
+| `action_manager.py` | 824 | Команды игрока |
+| `resource_transfer.py` | 578 | Передача ресурсов (диспетчер) |
+| `units.py` | 1900 | Все классы юнитов |
+| `ui_manager.py` | 873 | Обработка ввода |
+| `map_.py` | 662 | Карта, путь, видимость |
+| `combat.py` | 496 | Боевая система |
+| `strategic_ai.py` | 845 | Стратегический ИИ |
+| `renderer.py` | 111 | Фасад рендера |
+| `ui_panel_renderer.py` | 1194 | Панель UI |
+| `unit_renderer.py` | 733 | Отрисовка юнитов |
+| `map_renderer.py` | 588 | Отрисовка карты |
+| `esp_menu.py` | 572 | ESP-меню |
+| `game_config.py` | 252 | Все константы |
+| **TOTAL** | **~13000** | |
 
 ---
 

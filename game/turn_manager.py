@@ -290,7 +290,7 @@ class TurnManager:
             for enemy in g.all_units:
                 if enemy.faction != enemy_faction or not enemy.is_alive:
                     continue
-                if isinstance(enemy, (ReconDrone, FPVDrone)):
+                if isinstance(enemy, (ReconDrone, FPVDrone, Warehouse, SupplyCache)):
                     continue
                 cell = g.map.get_cell(enemy.x, enemy.y)
                 if not cell:
@@ -501,7 +501,7 @@ class TurnManager:
 
     def _do_entrench_phase(self):
         g = self.game
-        for unit in g.all_units:
+        for unit in list(g.all_units):
             if isinstance(unit, Infantry) and unit.is_alive:
                 if unit.building_cache:
                     cache = unit.building_cache
@@ -517,15 +517,19 @@ class TurnManager:
                                 g.all_units.remove(unit)
                             if unit in g.player_units:
                                 g.player_units.remove(unit)
+                            if unit in g.enemy_units:
+                                g.enemy_units.remove(unit)
                             cache.garrison += 1
                             g.message = f"{cache.name} построен! Отряд в гарнизоне"
+                            continue
                     else:
                         unit.building_cache = None
                 if unit.entrenching:
                     cell = g.map.get_cell(unit.x, unit.y)
-                    unit.entrench_step(g.map)
-                    if cell.entrenchment >= unit.max_entrenchment:
-                        unit.entrenching = False
+                    if cell:
+                        unit.entrench_step(g.map)
+                        if cell.entrenchment >= unit.max_entrenchment:
+                            unit.entrenching = False
 
     # ── enemy turn ───────────────────────────────────────────────────
 

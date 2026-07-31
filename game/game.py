@@ -168,6 +168,14 @@ class Game:
                 unit_list.append(truck)
                 self.map.add_unit(truck, sx, sy)
 
+            for i in range(2):
+                ex, ey = _find_free_cell(base_x + (-1 if not is_enemy else 1), base_y + 3 + i)
+                name = f"{prefix}РЭБ-{i+1}"
+                radar = RadarEW(ex, ey, faction, name)
+                self.all_units.append(radar)
+                unit_list.append(radar)
+                self.map.add_unit(radar, ex, ey)
+
         wx, wy = self.map.player_warehouse
         _spawn_units_for_faction(config.PLAYER, self.player_units, wx, wy, "", is_enemy=False)
 
