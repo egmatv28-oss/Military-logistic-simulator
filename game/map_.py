@@ -418,12 +418,11 @@ class GameMap:
         self.player_warehouse = player_city
         
         # Базы врага
-        if len(cities) >= 3:
-            enemy_cities = cities[1:3]
+        if len(cities) >= 2:
+            enemy_cities = [cities[1]]
         else:
-            enemy_cities = [(self.width - 4, 3), (self.width - 4, self.height - 3)]
+            enemy_cities = [(self.width - 4, self.height // 2)]
             for ex, ey in enemy_cities:
-                # Ищем ближайшее здание
                 for r in range(4):
                     found = False
                     for dx in range(-r, r + 1):
@@ -661,6 +660,50 @@ class GameMap:
                     heapq.heappush(q, (new_cost, nx, ny))
         
         return None
+
+    def serialize(self):
+        """Сериализовать карту для сохранения игры"""
+        cells = []
+        for row in self.grid:
+            for cell in row:
+                cells.append({
+                    'x': cell.x,
+                    'y': cell.y,
+                    'terrain': cell.terrain,
+                    'entrenchment': cell.entrenchment,
+                    'visible': cell.visible,
+                    'explored': cell.explored,
+                    'explored_player': cell.explored_player,
+                    'explored_enemy': cell.explored_enemy,
+                    'lasts_seen_enemy': cell.lasts_seen_enemy,
+                })
+        return {
+            'width': self.width,
+            'height': self.height,
+            'player_warehouse': self.player_warehouse,
+            'enemy_warehouses': self.enemy_warehouses,
+            'cells': cells,
+        }
+
+    @classmethod
+    def restore(cls, data):
+        """Восстановить карту из сериализованных данных"""
+        gm = cls.__new__(cls)
+        gm.width = data['width']
+        gm.height = data['height']
+        gm.grid = [[None for _ in range(gm.width)] for _ in range(gm.height)]
+        gm.player_warehouse = data.get('player_warehouse')
+        gm.enemy_warehouses = data.get('enemy_warehouses', [])
+        for c in data['cells']:
+            cell = Cell(c['x'], c['y'], c['terrain'])
+            cell.entrenchment = c.get('entrenchment', 0)
+            cell.visible = c.get('visible', False)
+            cell.explored = c.get('explored', False)
+            cell.explored_player = c.get('explored_player', False)
+            cell.explored_enemy = c.get('explored_enemy', False)
+            cell.lasts_seen_enemy = c.get('lasts_seen_enemy')
+            gm.grid[c['y']][c['x']] = cell
+        return gm
 
     def get_reachable_cells(self, start_x, start_y, max_cost, unit=None, max_steps=None):
         reachable = set()

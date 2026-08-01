@@ -32,19 +32,36 @@ class AIController(BaseController):
         return True
     
     def _move_combat_units(self):
-        """Движение боевых юнитов к ближайшим целям"""
+        """Движение НЕ назначенных в боевые группы юнитов к ближайшим целям.
+        Юниты из BattleGroup управляются StrategicAI и сюда НЕ попадают."""
         results = []
-        
-        # Определяем свои и вражеские фракции
+
         my_faction = self.faction
         enemy_faction = config.ENEMY if my_faction == config.PLAYER else config.PLAYER
-        
-        enemies = [u for u in self.game.all_units 
-                  if u.faction == my_faction and u.is_alive 
-                  and isinstance(u, (Infantry, Tank))]
+
+        # Собираем id всех юнитов, уже назначенных в боевые группы StrategicAI
+        assigned_ids = set()
+        for g in self.strategic_ai.groups:
+            for inf in g.infantry:
+                assigned_ids.add(id(inf))
+            if g.tank:
+                assigned_ids.add(id(g.tank))
+            if g.artillery:
+                assigned_ids.add(id(g.artillery))
+            if g.fpv_operator:
+                assigned_ids.add(id(g.fpv_operator))
+            if g.recon_operator:
+                assigned_ids.add(id(g.recon_operator))
+
+        enemies = [u for u in self.game.all_units
+                   if u.faction == my_faction and u.is_alive
+                   and isinstance(u, (Infantry, Tank))]
 
         for unit in enemies:
             if not unit.is_alive or unit.moved:
+                continue
+            # Не двигаем юнитов, которыми управляет StrategicAI
+            if id(unit) in assigned_ids:
                 continue
 
             # Найти ближайшую цель противника
@@ -62,8 +79,14 @@ class AIController(BaseController):
                         priority = 1
                     dist = self.game.map.distance(unit.x, unit.y, t.x, t.y)
                     targets.append((t, dist - priority * 3))
-            
+
             if not targets:
+                # Нет видимых целей — окопаться если в подходящей местности
+                if isinstance(unit, Infantry) and not unit.entrenching:
+                    cell = self.game.map.get_cell(unit.x, unit.y)
+                    if cell and cell.terrain in (config.FOREST, config.CITY):
+                        if cell.entrenchment < unit.max_entrenchment:
+                            unit.entrenching = True
                 continue
 
             closest = min(targets, key=lambda x: x[1])[0]
@@ -77,41 +100,38 @@ class AIController(BaseController):
                     results.append(result)
                 continue
 
-            # Двигаться к цели если не двигался
+            # Двигаться к цели
             if not unit.moved:
                 path = self.game.map.find_path(unit.x, unit.y, closest.x, closest.y, avoid_occupied=True)
                 if path and len(path) > 1:
-                    # ИИ предпочитает лес и город, избегает открытых полей
                     best_move = None
                     best_score = -999
-                    
-                    for nx, ny in path[1:3]:  # Проверяем первые 2 шага
+
+                    for nx, ny in path[1:3]:
                         cell = self.game.map.get_cell(nx, ny)
                         if not cell or not cell.is_walkable:
                             continue
-                        
-                        # Оценка местности
+
                         score = 0
                         if cell.terrain == config.FOREST:
-                            score = 10  # Лес - хорошо
+                            score = 10
                         elif cell.terrain == config.CITY:
-                            score = 8   # Город - хорошо
+                            score = 8
                         elif cell.terrain == config.ROAD:
-                            score = 5   # Дорога - нормально
+                            score = 5
                         elif cell.terrain == config.FIELD:
-                            score = -5  # Поле - плохо
-                        
-                        # Бонус за близость к цели
+                            score = -5
+
                         dist_to_target = self.game.map.distance(nx, ny, closest.x, closest.y)
                         score += (10 - dist_to_target)
-                        
+
                         if score > best_score:
                             best_score = score
                             best_move = (nx, ny)
-                    
+
                     if best_move:
                         nx, ny = best_move
-                        if hasattr(unit, 'fuel') and isinstance(unit, (Tank, SupplyTruck, RadarEW)) and unit.fuel <= 0:
+                        if hasattr(unit, 'fuel') and isinstance(unit, Tank) and unit.fuel <= 0:
                             continue
                         self.game.map.remove_unit(unit)
                         unit.x, unit.y = nx, ny

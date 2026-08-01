@@ -181,11 +181,11 @@ def _warehouse_to_infantry(src, tgt, res_type, limit):
 def _warehouse_to_tank(src, tgt, res_type, limit):
     total = 0
     if res_type == "ammo":
-        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, 10))
+        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, config.TRANSFER_WAREHOUSE_TO_TANK_LIMIT))
     elif res_type == "fuel":
-        total = _scalar_give(src, tgt, "fuel", "fuel", "fuel", "max_fuel", min(limit, 10))
+        total = _scalar_give(src, tgt, "fuel", "fuel", "fuel", "max_fuel", min(limit, config.TRANSFER_WAREHOUSE_TO_TANK_LIMIT))
     elif res_type == "food":
-        total = _scalar_give(src, tgt, "food", "supplies", "carry_food", "max_carry_food", min(limit, 10))
+        total = _scalar_give(src, tgt, "food", "supplies", "carry_food", "max_carry_food", min(limit, config.TRANSFER_WAREHOUSE_TO_TANK_LIMIT))
         if total < limit:
             extra = _stockpile_give_to_soldiers(src, tgt.alive_soldiers, "food", "supplies", limit - total)
             total += extra
@@ -195,7 +195,7 @@ def _warehouse_to_tank(src, tgt, res_type, limit):
 def _warehouse_to_artillery(src, tgt, res_type, limit):
     total = 0
     if res_type == "ammo":
-        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, 10))
+        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, config.TRANSFER_WAREHOUSE_TO_ARTILLERY_LIMIT))
     elif res_type == "food":
         total = _stockpile_give_to_soldiers(src, tgt.alive_soldiers, "food", "supplies", limit)
     return total
@@ -204,7 +204,7 @@ def _warehouse_to_artillery(src, tgt, res_type, limit):
 def _warehouse_to_recon_op(src, tgt, res_type, limit):
     total = 0
     if res_type == "batteries":
-        total = _scalar_give(src, tgt, "batteries", "batteries", "batteries", "max_batteries", min(limit, 10))
+        total = _scalar_give(src, tgt, "batteries", "batteries", "batteries", "max_batteries", min(limit, config.TRANSFER_WAREHOUSE_TO_RECON_BATTERY_LIMIT))
     elif res_type == "food":
         total = _scalar_give(src, tgt, "food", "supplies", "food", "max_food", limit)
     elif res_type == "ammo":
@@ -215,9 +215,9 @@ def _warehouse_to_recon_op(src, tgt, res_type, limit):
 def _warehouse_to_fpv_op(src, tgt, res_type, limit):
     total = 0
     if res_type == "fpv":
-        total = _scalar_give(src, tgt, "fpv", "fpv_drones", "fpv_stock", "max_stock", min(limit, 5))
+        total = _scalar_give(src, tgt, "fpv", "fpv_drones", "fpv_stock", "max_stock", min(limit, config.TRANSFER_WAREHOUSE_TO_FPV_DRONE_LIMIT))
     elif res_type == "ammo":
-        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, 10))
+        total = _scalar_give(src, tgt, "ammo", "ammo", "ammo", "max_ammo", min(limit, config.TRANSFER_WAREHOUSE_TO_FPV_AMMO_LIMIT))
     elif res_type == "food":
         total = _scalar_give(src, tgt, "food", "supplies", "food", "max_food", limit)
     return total
@@ -276,17 +276,17 @@ def _truck_to_tank(truck, tgt, res_type, limit):
     total = 0
     if res_type == "ammo" and truck.cargo.get(config.CARGO_AMMO, 0) > 0:
         need = tgt.max_ammo - tgt.ammo
-        given = truck.unload(config.CARGO_AMMO, min(need, 10))
+        given = truck.unload(config.CARGO_AMMO, min(need, config.TRANSFER_TRUCK_TO_TANK_AMMO_LIMIT))
         tgt.ammo += given
         total += given
     elif res_type == "fuel" and truck.cargo.get(config.CARGO_FUEL, 0) > 0:
         need = tgt.max_fuel - tgt.fuel
-        given = truck.unload(config.CARGO_FUEL, min(need, 10))
+        given = truck.unload(config.CARGO_FUEL, min(need, config.TRANSFER_TRUCK_TO_TANK_FUEL_LIMIT))
         tgt.fuel += given
         total += given
     elif res_type == "food" and truck.cargo.get(config.CARGO_SUPPLIES, 0) > 0:
         need = tgt.max_carry_food - tgt.carry_food
-        given = truck.unload(config.CARGO_SUPPLIES, min(need, 10))
+        given = truck.unload(config.CARGO_SUPPLIES, min(need, config.TRANSFER_TRUCK_TO_TANK_FOOD_LIMIT))
         tgt.carry_food += given
         total += given
     return total
@@ -296,17 +296,17 @@ def _truck_to_recon_op(truck, tgt, res_type, limit):
     total = 0
     if res_type == "batteries" and truck.cargo.get(config.CARGO_BATTERIES, 0) > 0:
         need = tgt.max_batteries - tgt.batteries
-        given = truck.unload(config.CARGO_BATTERIES, min(need, 10))
+        given = truck.unload(config.CARGO_BATTERIES, min(need, config.TRANSFER_TRUCK_TO_RECON_BATTERY_LIMIT))
         tgt.batteries += given
         total += given
     elif res_type == "food" and truck.cargo.get(config.CARGO_SUPPLIES, 0) > 0:
         need = tgt.max_food - tgt.food
-        given = truck.unload(config.CARGO_SUPPLIES, min(need, 5))
+        given = truck.unload(config.CARGO_SUPPLIES, min(need, config.TRANSFER_TRUCK_TO_RECON_FOOD_AMMO_LIMIT))
         tgt.food += given
         total += given
     elif res_type == "ammo" and truck.cargo.get(config.CARGO_AMMO, 0) > 0:
         need = tgt.max_ammo - tgt.ammo
-        given = truck.unload(config.CARGO_AMMO, min(need, 5))
+        given = truck.unload(config.CARGO_AMMO, min(need, config.TRANSFER_TRUCK_TO_RECON_FOOD_AMMO_LIMIT))
         tgt.ammo += given
         total += given
     return total
@@ -316,12 +316,12 @@ def _truck_to_fpv_op(truck, tgt, res_type, limit):
     total = 0
     if res_type == "food" and truck.cargo.get(config.CARGO_SUPPLIES, 0) > 0:
         need = tgt.max_food - tgt.food
-        given = truck.unload(config.CARGO_SUPPLIES, min(need, 5))
+        given = truck.unload(config.CARGO_SUPPLIES, min(need, config.TRANSFER_TRUCK_TO_FPV_FOOD_AMMO_LIMIT))
         tgt.food += given
         total += given
     elif res_type == "ammo" and truck.cargo.get(config.CARGO_AMMO, 0) > 0:
         need = tgt.max_ammo - tgt.ammo
-        given = truck.unload(config.CARGO_AMMO, min(need, 5))
+        given = truck.unload(config.CARGO_AMMO, min(need, config.TRANSFER_TRUCK_TO_FPV_FOOD_AMMO_LIMIT))
         tgt.ammo += given
         total += given
     return total
@@ -331,12 +331,12 @@ def _truck_to_soldier_unit(truck, tgt, res_type, limit):
     total = 0
     if res_type == "food" and truck.cargo.get(config.CARGO_SUPPLIES, 0) > 0:
         need = tgt.soldier.max_food - tgt.soldier.food
-        given = truck.unload(config.CARGO_SUPPLIES, min(need, 5))
+        given = truck.unload(config.CARGO_SUPPLIES, min(need, config.TRANSFER_TRUCK_TO_SOLDIER_FOOD_AMMO_LIMIT))
         tgt.soldier.food += given
         total += given
     elif res_type == "ammo" and truck.cargo.get(config.CARGO_AMMO, 0) > 0:
         need = tgt.soldier.max_ammo - tgt.soldier.ammo
-        given = truck.unload(config.CARGO_AMMO, min(need, 5))
+        given = truck.unload(config.CARGO_AMMO, min(need, config.TRANSFER_TRUCK_TO_SOLDIER_FOOD_AMMO_LIMIT))
         tgt.soldier.ammo += given
         total += given
     return total
@@ -345,7 +345,7 @@ def _truck_to_soldier_unit(truck, tgt, res_type, limit):
 def _truck_to_truck(truck, tgt, res_type, limit):
     if res_type == "fuel" and truck.cargo.get(config.CARGO_FUEL, 0) > 0:
         need = tgt.max_fuel - tgt.fuel
-        given = truck.unload(config.CARGO_FUEL, min(need, 20))
+        given = truck.unload(config.CARGO_FUEL, min(need, config.TRANSFER_TRUCK_TO_TRUCK_FUEL_LIMIT))
         tgt.fuel += given
         return given
     return 0
@@ -355,7 +355,7 @@ def _truck_to_artillery(truck, tgt, res_type, limit):
     total = 0
     if res_type == "ammo" and truck.cargo.get(config.CARGO_AMMO, 0) > 0:
         need = tgt.max_ammo - tgt.ammo
-        given = truck.unload(config.CARGO_AMMO, min(need, 5))
+        given = truck.unload(config.CARGO_AMMO, min(need, config.TRANSFER_TRUCK_TO_ARTILLERY_LIMIT))
         tgt.ammo += given
         total += given
     elif res_type == "food" and truck.cargo.get(config.CARGO_SUPPLIES, 0) > 0:
@@ -365,7 +365,7 @@ def _truck_to_artillery(truck, tgt, res_type, limit):
             if s.food >= s.max_food:
                 continue
             need = s.max_food - s.food
-            given = truck.unload(config.CARGO_SUPPLIES, min(need, 5))
+            given = truck.unload(config.CARGO_SUPPLIES, min(need, config.TRANSFER_TRUCK_TO_ARTILLERY_LIMIT))
             s.food += given
             total += given
     return total
@@ -383,7 +383,7 @@ def _soldier_unit_to_infantry(src, tgt, res_type, limit):
         tm = getattr(ts, max_attr)
         if tv >= tm:
             continue
-        transfer = min(sv - tv if sv > tv else 0, 3)
+        transfer = min(sv - tv if sv > tv else 0, config.TRANSFER_SOLDIER_TO_INFANTRY_LIMIT)
         if transfer <= 0:
             continue
         setattr(src.soldier, attr, sv - transfer)
@@ -400,7 +400,7 @@ def _soldier_unit_to_soldier_unit(src, tgt, res_type, limit):
     tv = getattr(tgt.soldier, attr)
     if sv <= 1 or sv <= tv:
         return 0
-    transfer = min(sv - tv, 3)
+    transfer = min(sv - tv, config.TRANSFER_SOLDIER_TO_SOLDIER_LIMIT)
     setattr(src.soldier, attr, sv - transfer)
     setattr(tgt.soldier, attr, tv + transfer)
     return transfer
@@ -416,14 +416,14 @@ def _tank_to_soldier_unit(src, tgt, res_type, limit):
                 tgt.soldier.food += give
                 return give
         for s in src.alive_soldiers:
-            if s.food > 100:
-                give = min(s.food - 100, 3)
+            if s.food > config.TRANSFER_TANK_SURPLUS_FOOD_THRESHOLD:
+                give = min(s.food - config.TRANSFER_TANK_SURPLUS_FOOD_THRESHOLD, config.TRANSFER_TANK_SURPLUS_FOOD_LIMIT)
                 tgt.soldier.food += give
                 s.food -= give
                 return give
     elif res_type == "ammo":
         if src.ammo > 0:
-            give = min(src.ammo, tgt.soldier.max_ammo - tgt.soldier.ammo, 3)
+            give = min(src.ammo, tgt.soldier.max_ammo - tgt.soldier.ammo, config.TRANSFER_TANK_TO_SOLDIER_AMMO_LIMIT)
             if give > 0:
                 src.ammo -= give
                 tgt.soldier.ammo += give
@@ -435,7 +435,7 @@ def _artillery_to_infantry(src, tgt, res_type, limit):
     if res_type == "food":
         total = 0
         for s in src.alive_soldiers:
-            available = s.food - 100
+            available = s.food - config.TRANSFER_ARTILLERY_SURPLUS_FOOD_THRESHOLD
             if available <= 0:
                 continue
             for ts in tgt.alive_soldiers:
@@ -460,7 +460,7 @@ def _artillery_to_tank(src, tgt, res_type, limit):
     if res_type == "food":
         total = 0
         for s in src.alive_soldiers:
-            available = s.food - 100
+            available = s.food - config.TRANSFER_ARTILLERY_SURPLUS_FOOD_THRESHOLD
             if available <= 0:
                 continue
             for ts in tgt.alive_soldiers:
@@ -646,7 +646,7 @@ def can_accept_resource(unit, res_type):
 
 # ─── public API ───────────────────────────────────────────────────────
 
-def transfer(source, target, res_type, limit=5):
+def transfer(source, target, res_type, limit=config.TRANSFER_DEFAULT_LIMIT):
     """Transfer *res_type* from *source* to *target* (up to *limit* units).
 
     Returns the amount actually transferred (0 if nothing moved).

@@ -17,7 +17,7 @@ class TurnManager:
     def end_planning_phase(self):
         g = self.game
         g.phase = config.PHASE_MOVEMENT
-        g.phase_timer = 30
+        g.phase_timer = config.PHASE_TIMER_PLANNING
         self.advance_phase()
 
     def advance_phase(self):
@@ -214,17 +214,17 @@ class TurnManager:
                 continue
             val = 0
             if isinstance(u, Warehouse):
-                val = 10
+                val = config.ARTILLERY_TARGET_PRIORITY_WAREHOUSE
             elif isinstance(u, SupplyCache):
-                val = 8
+                val = config.ARTILLERY_TARGET_PRIORITY_CACHE
             elif isinstance(u, Tank):
-                val = 6
+                val = config.ARTILLERY_TARGET_PRIORITY_TANK
             elif isinstance(u, Infantry):
-                val = 4
+                val = config.ARTILLERY_TARGET_PRIORITY_INFANTRY
             elif isinstance(u, Artillery):
-                val = 5
+                val = config.ARTILLERY_TARGET_PRIORITY_ARTILLERY
             elif isinstance(u, (ReconOperator, FPVOperator)):
-                val = 3
+                val = config.ARTILLERY_TARGET_PRIORITY_OPERATOR
             if val > best_val:
                 best_val = val
                 best = u
@@ -290,7 +290,7 @@ class TurnManager:
             for enemy in g.all_units:
                 if enemy.faction != enemy_faction or not enemy.is_alive:
                     continue
-                if isinstance(enemy, (ReconDrone, FPVDrone)):
+                if isinstance(enemy, (ReconDrone, FPVDrone, Warehouse, SupplyCache)):
                     continue
                 cell = g.map.get_cell(enemy.x, enemy.y)
                 if not cell:
@@ -501,7 +501,7 @@ class TurnManager:
 
     def _do_entrench_phase(self):
         g = self.game
-        for unit in g.all_units:
+        for unit in list(g.all_units):
             if isinstance(unit, Infantry) and unit.is_alive:
                 if unit.building_cache:
                     cache = unit.building_cache
@@ -517,15 +517,19 @@ class TurnManager:
                                 g.all_units.remove(unit)
                             if unit in g.player_units:
                                 g.player_units.remove(unit)
+                            if unit in g.enemy_units:
+                                g.enemy_units.remove(unit)
                             cache.garrison += 1
                             g.message = f"{cache.name} построен! Отряд в гарнизоне"
+                            continue
                     else:
                         unit.building_cache = None
                 if unit.entrenching:
                     cell = g.map.get_cell(unit.x, unit.y)
-                    unit.entrench_step(g.map)
-                    if cell.entrenchment >= unit.max_entrenchment:
-                        unit.entrenching = False
+                    if cell:
+                        unit.entrench_step(g.map)
+                        if cell.entrenchment >= unit.max_entrenchment:
+                            unit.entrenching = False
 
     # ── enemy turn ───────────────────────────────────────────────────
 
@@ -577,11 +581,11 @@ class TurnManager:
             for wh in g.player_units:
                 if isinstance(wh, Warehouse) and wh.is_alive and wh.faction == config.PLAYER:
                     wh.reinforce()
-                    wh.fpv_drones = min(wh.fpv_drones + 2, 10)
+                    wh.fpv_drones = min(wh.fpv_drones + config.WAREHOUSE_REINFORCE_FPV_DRONES, config.WAREHOUSE_MAX_FPV_DRONES)
             for wh in g.enemy_units:
                 if isinstance(wh, Warehouse) and wh.is_alive and wh.faction == config.ENEMY:
                     wh.reinforce()
-                    wh.fpv_drones = min(wh.fpv_drones + 2, 10)
+                    wh.fpv_drones = min(wh.fpv_drones + config.WAREHOUSE_REINFORCE_FPV_DRONES, config.WAREHOUSE_MAX_FPV_DRONES)
             g.message = f"Подкрепление прибыло на склады!"
 
         self._auto_resupply_from_caches()
@@ -592,14 +596,14 @@ class TurnManager:
                 if isinstance(unit, Infantry):
                     alive = unit.alive_soldiers
                     hungry = [s for s in alive if s.food <= 0]
-                    if hungry and len(hungry) >= len(alive) // 2:
+                    if hungry and len(hungry) >= len(alive) // config.STARVATION_DEATH_THRESHOLD_DIVISOR:
                         random.choice(hungry).is_alive = False
                         g.combat_log.append({"message": f"{hungry[0].full_name} умер от голода"})
                     if unit.soldiers <= 0:
                         unit.die()
                 elif isinstance(unit, SoldierUnit):
                     if unit.soldier.food <= 0:
-                        unit.soldier.health = max(0, unit.soldier.health - 10)
+                        unit.soldier.health = max(0, unit.soldier.health - config.SOLDIER_UNIT_STARVATION_DAMAGE)
                         if unit.soldier.health <= 0:
                             unit.die()
                 if not unit.moved:
@@ -611,7 +615,7 @@ class TurnManager:
         for u in list(g.all_units):
             if isinstance(u, SupplyCache) and u.is_alive and u.build_turns >= u.build_required:
                 if u.garrison <= 0:
-                    if random.random() < 0.15:
+                    if random.random() < config.CACHE_ABANDON_CHANCE:
                         g.message = f"{u.name} заброшен (нет гарнизона)"
                         u.die()
                         g.map.remove_unit(u)
@@ -710,22 +714,22 @@ class TurnManager:
 
     def _add_combat_effect(self, x, y, effect_type, hits=None):
         g = self.game
-        g.combat_effects.append({'x': x, 'y': y, 'type': effect_type, 'timer': 30})
+        g.combat_effects.append({'x': x, 'y': y, 'type': effect_type, 'timer': config.EFFECT_TIMER_COMBAT})
         if hits:
             for hit in hits[:5]:
                 hit_x = hit.get('x', x)
                 hit_y = hit.get('y', y)
                 if hit.get('ricochet'):
-                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'ricochet', 'timer': 20})
+                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'ricochet', 'timer': config.EFFECT_TIMER_RICOCHET})
                 elif hit.get('explosion'):
-                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'attack', 'timer': 25})
+                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'attack', 'timer': config.EFFECT_TIMER_EXPLOSION})
                 elif hit.get('kill'):
-                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'attack', 'timer': 35})
+                    g.combat_effects.append({'x': hit_x, 'y': hit_y, 'type': 'attack', 'timer': config.EFFECT_TIMER_KILL})
 
     def _add_projectile_effect(self, src_x, src_y, dst_x, dst_y, effect_type="artillery_shell"):
         self.game.combat_effects.append({
             'x': dst_x, 'y': dst_y, 'src_x': src_x, 'src_y': src_y,
-            'type': effect_type, 'timer': 20, 'max_timer': 20
+            'type': effect_type, 'timer': config.EFFECT_TIMER_PROJECTILE, 'max_timer': config.EFFECT_TIMER_PROJECTILE
         })
 
     def _update_combat_effects(self):
@@ -737,8 +741,6 @@ class TurnManager:
 
     def _auto_resupply_units(self):
         g = self.game
-        AUTO_RESUPPLY_RANGE = 15
-        RESUPPLY_THRESHOLD = 0.25
         for unit in g.player_units:
             if not unit.is_alive or unit in g.waypoints:
                 continue
@@ -753,7 +755,7 @@ class TurnManager:
             for attr, max_attr in checks:
                 val = getattr(unit, attr, 1)
                 mx = getattr(unit, max_attr, 1)
-                if mx > 0 and val / mx < RESUPPLY_THRESHOLD:
+                if mx > 0 and val / mx < config.AUTO_RESUPPLY_THRESHOLD:
                     low = True
                     break
             if not low:
@@ -764,7 +766,7 @@ class TurnManager:
                 if not u.is_alive or not isinstance(u, (SupplyCache, Warehouse)):
                     continue
                 dist = abs(u.x - unit.x) + abs(u.y - unit.y)
-                if dist <= AUTO_RESUPPLY_RANGE and dist < best_dist:
+                if dist <= config.AUTO_RESUPPLY_RANGE and dist < best_dist:
                     best = u
                     best_dist = dist
             if best:
@@ -772,14 +774,12 @@ class TurnManager:
 
     def _auto_resupply_from_caches(self):
         g = self.game
-        CACHE_RESUPPLY_RANGE = 3
-        WAREHOUSE_RESUPPLY_RANGE = 1
         for source in g.all_units:
             is_cache = isinstance(source, SupplyCache) and source.is_alive and source.build_turns >= source.build_required
             is_warehouse = isinstance(source, Warehouse) and source.is_alive
             if not is_cache and not is_warehouse:
                 continue
-            resupply_range = CACHE_RESUPPLY_RANGE if is_cache else WAREHOUSE_RESUPPLY_RANGE
+            resupply_range = config.CACHE_RESUPPLY_RANGE if is_cache else config.WAREHOUSE_RESUPPLY_RANGE
             for unit in g.all_units:
                 if not unit.is_alive or unit.faction != source.faction:
                     continue
@@ -789,19 +789,19 @@ class TurnManager:
                 if isinstance(unit, Infantry):
                     for s in unit.alive_soldiers:
                         if s.food < s.max_food and source.supplies > 0:
-                            take = min(2, s.max_food - s.food, source.supplies)
+                            take = min(config.RESUPPLY_FOOD_PER_SOLDIER, s.max_food - s.food, source.supplies)
                             s.food += take
                             source.supplies -= take
                     total_ammo = sum(s.ammo for s in unit.alive_soldiers)
                     if total_ammo < unit.soldiers * config.SOLDIER_MAX_AMMO and source.ammo > 0:
                         for s in unit.alive_soldiers:
                             if s.ammo < s.max_ammo and source.ammo > 0:
-                                take = min(2, s.max_ammo - s.ammo, source.ammo)
+                                take = min(config.RESUPPLY_AMMO_PER_SOLDIER, s.max_ammo - s.ammo, source.ammo)
                                 s.ammo += take
                                 source.ammo -= take
                 elif isinstance(unit, Tank):
                     if unit.fuel < unit.max_fuel and source.fuel > 0:
-                        take = min(5, unit.max_fuel - unit.fuel, source.fuel)
+                        take = min(config.RESUPPLY_TANK_FUEL, unit.max_fuel - unit.fuel, source.fuel)
                         unit.fuel += take
                         source.fuel -= take
                     if unit.ammo < unit.max_ammo and source.ammo > 0:
@@ -809,48 +809,48 @@ class TurnManager:
                         unit.ammo += take
                         source.ammo -= take
                     if unit.carry_food < unit.max_carry_food and source.supplies > 0:
-                        take = min(5, unit.max_carry_food - unit.carry_food, source.supplies)
+                        take = min(config.RESUPPLY_TANK_CARRY_FOOD, unit.max_carry_food - unit.carry_food, source.supplies)
                         unit.carry_food += take
                         source.supplies -= take
                     if unit.crew < unit.max_crew and source.supplies > 0:
-                        take = min(2, unit.max_crew - unit.crew, source.supplies // 5)
+                        take = min(config.RESUPPLY_CREW_REINFORCE_COST, unit.max_crew - unit.crew, source.supplies // config.RESUPPLY_CREW_REINFORCE_RATIO)
                         unit.crew += take
-                        source.supplies -= take * 5
+                        source.supplies -= take * config.RESUPPLY_CREW_REINFORCE_RATIO
                 elif isinstance(unit, (ReconOperator, FPVOperator)):
                     if hasattr(unit, 'batteries') and unit.batteries < unit.max_batteries and source.batteries > 0:
-                        take = min(5, unit.max_batteries - unit.batteries, source.batteries)
+                        take = min(config.RESUPPLY_OPERATOR_BATTERIES, unit.max_batteries - unit.batteries, source.batteries)
                         unit.batteries += take
                         source.batteries -= take
                     if hasattr(unit, 'food') and unit.food < unit.max_food and source.supplies > 0:
-                        take = min(3, unit.max_food - unit.food, source.supplies)
+                        take = min(config.RESUPPLY_OPERATOR_FOOD, unit.max_food - unit.food, source.supplies)
                         unit.food += take
                         source.supplies -= take
                     if hasattr(unit, 'ammo') and unit.ammo < unit.max_ammo and source.ammo > 0:
-                        take = min(3, unit.max_ammo - unit.ammo, source.ammo)
+                        take = min(config.RESUPPLY_OPERATOR_AMMO, unit.max_ammo - unit.ammo, source.ammo)
                         unit.ammo += take
                         source.ammo -= take
                 elif isinstance(unit, Artillery):
                     if unit.ammo < unit.max_ammo and source.ammo > 0:
-                        take = min(3, unit.max_ammo - unit.ammo, source.ammo)
+                        take = min(config.RESUPPLY_ARTILLERY_AMMO, unit.max_ammo - unit.ammo, source.ammo)
                         unit.ammo += take
                         source.ammo -= take
                     for s in unit.alive_soldiers:
                         if s.food < s.max_food and source.supplies > 0:
-                            take = min(2, s.max_food - s.food, source.supplies)
+                            take = min(config.RESUPPLY_ARTILLERY_SOLDIER_FOOD, s.max_food - s.food, source.supplies)
                             s.food += take
                             source.supplies -= take
                 elif isinstance(unit, RadarEW):
                     if unit.fuel < unit.max_fuel and source.fuel > 0:
-                        take = min(5, unit.max_fuel - unit.fuel, source.fuel)
+                        take = min(config.RESUPPLY_RADAR_EW_FUEL, unit.max_fuel - unit.fuel, source.fuel)
                         unit.fuel += take
                         source.fuel -= take
                     if unit.food < unit.max_food and source.supplies > 0:
-                        take = min(3, unit.max_food - unit.food, source.supplies)
+                        take = min(config.RESUPPLY_RADAR_EW_FOOD, unit.max_food - unit.food, source.supplies)
                         unit.food += take
                         source.supplies -= take
                 elif isinstance(unit, SupplyTruck):
                     if unit.fuel < unit.max_fuel and source.fuel > 0:
-                        take = min(5, unit.max_fuel - unit.fuel, source.fuel)
+                        take = min(config.RESUPPLY_TRUCK_FUEL, unit.max_fuel - unit.fuel, source.fuel)
                         unit.fuel += take
                         source.fuel -= take
 
@@ -897,7 +897,7 @@ class TurnManager:
             if not wh_list:
                 continue
             wh = wh_list[0]
-            for dx, dy in [(2,0), (-2,0), (0,2), (0,-2)]:
+            for dx, dy in [(config.TANK_SPAWN_OFFSET,0), (-config.TANK_SPAWN_OFFSET,0), (0,config.TANK_SPAWN_OFFSET), (0,-config.TANK_SPAWN_OFFSET)]:
                 nx, ny = wh.x + dx, wh.y + dy
                 cell = g.map.get_cell(nx, ny)
                 if cell and cell.is_walkable and not any(u.x == nx and u.y == ny and u.is_alive for u in g.all_units):
@@ -913,7 +913,7 @@ class TurnManager:
         g = self.game
         for faction, units in [(config.PLAYER, g.player_units), (config.ENEMY, g.enemy_units)]:
             wh_list = [u for u in units if isinstance(u, Warehouse) and u.is_alive]
-            if not wh_list or wh_list[0].batteries < 5:
+            if not wh_list or wh_list[0].batteries < config.DRONE_SPAWN_BATTERY_COST:
                 continue
             wh = wh_list[0]
             for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
@@ -924,7 +924,7 @@ class TurnManager:
                     g.all_units.append(drone)
                     units.append(drone)
                     g.map.add_unit(drone, nx, ny)
-                    wh.batteries -= 5
+                    wh.batteries -= config.DRONE_SPAWN_BATTERY_COST
                     if faction == config.PLAYER:
                         g.message = "Прибыл разведдрон!"
                     break
@@ -1026,6 +1026,6 @@ class TurnManager:
                 if g.phase == config.PHASE_PLANNING:
                     g.phase_timer = 0
                 else:
-                    g.phase_timer = 20
+                    g.phase_timer = config.PHASE_TIMER_DEFAULT
         self._update_combat_effects()
         g._update_movement_animation()

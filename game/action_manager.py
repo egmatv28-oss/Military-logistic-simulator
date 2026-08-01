@@ -391,7 +391,7 @@ class ActionManager:
             g.message = "Нельзя построить здесь"
             return
         for u in g.all_units:
-            if isinstance(u, SupplyCache) and u.is_alive and abs(u.x - unit.x) + abs(u.y - unit.y) <= 3:
+            if isinstance(u, SupplyCache) and u.is_alive and abs(u.x - unit.x) + abs(u.y - unit.y) <= config.CACHE_MIN_DISTANCE:
                 g.message = "Слишком близко к другому погребу"
                 return
         suffix = unit.name.split()[-1]
@@ -694,7 +694,7 @@ class ActionManager:
                 continue
             if any(u.x == nx and u.y == ny and u.is_alive for u in g.all_units):
                 continue
-            inf = Infantry(nx, ny, config.PLAYER, f"Отряд {cache.name.split()[-1]}", soldiers=6)
+            inf = Infantry(nx, ny, config.PLAYER, f"Отряд {cache.name.split()[-1]}", soldiers=config.GARRISON_EXIT_SOLDIERS)
             g.map.add_unit(inf, nx, ny)
             g.all_units.append(inf)
             g.player_units.append(inf)
@@ -771,8 +771,8 @@ class ActionManager:
             g.message = "Нет боезапаса"
             return
         dist = abs(unit.x - gx) + abs(unit.y - gy)
-        if dist > 2:
-            g.message = "Слишком далеко (макс 2 клетки)"
+        if dist > config.TANK_CELL_ATTACK_RANGE:
+            g.message = f"Слишком далеко (макс {config.TANK_CELL_ATTACK_RANGE} клетки)"
             return
         cell = g.map.get_cell(gx, gy)
         if not cell:
@@ -783,7 +783,7 @@ class ActionManager:
         for target in list(cell.units):
             if target.faction == config.ENEMY and target.is_alive:
                 if isinstance(target, Infantry):
-                    dmg = random.randint(1, unit.attack_power + 2)
+                    dmg = random.randint(1, unit.attack_power + config.TANK_VS_INF_MELEE_BONUS)
                     alive = target.alive_soldiers
                     to_kill = min(len(alive), dmg)
                     for s in random.sample(alive, to_kill):
@@ -866,8 +866,8 @@ class ActionManager:
             g.message = "Нет склада"
             return
         dist = abs(wh.x - tx) + abs(wh.y - ty)
-        if dist > 3:
-            g.message = "Слишком далеко (макс 3 клетки)"
+        if dist > config.WAREHOUSE_MOVE_MAX_DISTANCE:
+            g.message = f"Слишком далеко (макс {config.WAREHOUSE_MOVE_MAX_DISTANCE} клетки)"
             return
         g.map.remove_unit(wh)
         wh.x, wh.y = tx, ty

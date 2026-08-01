@@ -104,7 +104,8 @@ class ESPMenu:
         elif self.current_tab == 1:
             return len(self.cheat_commands)
         elif self.current_tab == 2:
-            return len(self.saves) if self.saves else 1
+            # Кнопка сохранения + список сохранений
+            return (len(self.saves) + 1) if self.saves else 1
         elif self.current_tab == 3:
             return 1
         return 0
@@ -115,10 +116,15 @@ class ESPMenu:
             # ESP toggles
             action = self.esp_options[self.selected_option][1]
             self._toggle_option(action)
-        elif self.current_tab == 2 and self.saves:
+        elif self.current_tab == 2:
+            if self.selected_option == 0:
+                # Кнопка "СОХРАНИТЬ ИГРУ" — сохранение обрабатывается в main.py
+                return
             # Загрузка сохранения
-            save_name = self.saves[self.selected_option]['name']
-            self._load_game(save_name)
+            save_idx = self.selected_option - 1
+            if self.saves and 0 <= save_idx < len(self.saves):
+                save_name = self.saves[save_idx]['name']
+                self._load_game(save_name)
     
     def _toggle_option(self, action):
         """Переключить опцию ESP"""

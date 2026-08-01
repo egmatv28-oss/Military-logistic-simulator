@@ -80,14 +80,14 @@ class Soldier:
             self.surname = surname or random.choice(SURNAMES_FEMALE)
         
         if skills is None:
-            num_skills = random.randint(2, 4)
+            num_skills = random.randint(config.SOLDIER_SKILL_COUNT_MIN, config.SOLDIER_SKILL_COUNT_MAX)
             self.skills = random.sample(SKILLS, num_skills)
         else:
             self.skills = skills
         
-        self.experience = random.randint(0, 20)
-        self.morale = random.randint(50, 100)
-        self.health = 100
+        self.experience = random.randint(config.SOLDIER_INIT_EXPERIENCE_MIN, config.SOLDIER_INIT_EXPERIENCE_MAX)
+        self.morale = random.randint(config.SOLDIER_INIT_MORALE_MIN, config.SOLDIER_INIT_MORALE_MAX)
+        self.health = config.SOLDIER_MAX_HEALTH
         self._is_alive = True
         self.food = config.SOLDIER_MAX_FOOD
         self.max_food = config.SOLDIER_MAX_FOOD
@@ -122,9 +122,9 @@ class Soldier:
     
     @property
     def effective_skill(self):
-        base = len(self.skills) * 5 + self.experience
+        base = len(self.skills) * config.SOLDIER_SKILL_BONUS_PER_SKILL + self.experience
         morale_mod = self.morale / 100
-        health_mod = self.health / 100
+        health_mod = self.health / config.SOLDIER_MAX_HEALTH
         wound_mod = 1.0 + WOUND_PENALTIES[self.wound_level]["attack"] / 100
         return int(base * morale_mod * health_mod * wound_mod)
 
@@ -135,11 +135,11 @@ class Soldier:
     def take_damage(self, amount):
         self.health = max(0, self.health - amount)
         # Определяем уровень ранения по здоровью
-        if self.health > 75:
+        if self.health > config.WOUND_THRESHOLD_NONE:
             self.wound_level = WOUND_NONE
-        elif self.health > 50:
+        elif self.health > config.WOUND_THRESHOLD_LIGHT:
             self.wound_level = WOUND_LIGHT
-        elif self.health > 25:
+        elif self.health > config.WOUND_THRESHOLD_MEDIUM:
             self.wound_level = WOUND_MEDIUM
         else:
             self.wound_level = WOUND_HEAVY
@@ -148,13 +148,13 @@ class Soldier:
             self.morale = 0
     
     def heal(self, amount):
-        self.health = min(100, self.health + amount)
+        self.health = min(config.SOLDIER_MAX_HEALTH, self.health + amount)
         # Обновляем уровень ранения
-        if self.health > 75:
+        if self.health > config.WOUND_THRESHOLD_NONE:
             self.wound_level = WOUND_NONE
-        elif self.health > 50:
+        elif self.health > config.WOUND_THRESHOLD_LIGHT:
             self.wound_level = WOUND_LIGHT
-        elif self.health > 25:
+        elif self.health > config.WOUND_THRESHOLD_MEDIUM:
             self.wound_level = WOUND_MEDIUM
         else:
             self.wound_level = WOUND_HEAVY
@@ -164,23 +164,23 @@ class Soldier:
         if self.wound_level == WOUND_NONE:
             return False
         # Шанс лечения зависит от навыка санитара
-        base_chance = 30 + medic_skill * 10
+        base_chance = config.MEDIC_BASE_TREAT_CHANCE + medic_skill * config.MEDIC_SKILL_TREAT_BONUS
         if random.randint(1, 100) <= base_chance:
             # Улучшаем ранение на 1 уровень
             if self.wound_level > WOUND_NONE:
                 self.wound_level -= 1
                 # Восстанавливаем здоровье в зависимости от нового уровня
                 if self.wound_level == WOUND_NONE:
-                    self.health = max(self.health, 80)
+                    self.health = max(self.health, config.HEALTH_AFTER_HEAL_NONE)
                 elif self.wound_level == WOUND_LIGHT:
-                    self.health = max(self.health, 55)
+                    self.health = max(self.health, config.HEALTH_AFTER_HEAL_LIGHT)
                 elif self.wound_level == WOUND_MEDIUM:
-                    self.health = max(self.health, 30)
+                    self.health = max(self.health, config.HEALTH_AFTER_HEAL_MEDIUM)
                 return True
         return False
     
     def gain_experience(self, amount):
-        self.experience = min(100, self.experience + amount)
+        self.experience = min(config.SOLDIER_MAX_EXPERIENCE, self.experience + amount)
     
     def change_morale(self, amount):
         self.morale = max(0, min(100, self.morale + amount))
@@ -305,7 +305,7 @@ class Unit:
 
 
 class Infantry(Unit):
-    NORMAL_SQUAD_SIZE = 8
+    NORMAL_SQUAD_SIZE = config.INFANTRY_NORMAL_SQUAD_SIZE
 
     def __init__(self, x, y, faction, name="Пехота", soldiers=None):
         super().__init__(x, y, config.INFANTRY, faction, name)
@@ -449,9 +449,9 @@ class Infantry(Unit):
 
     @property
     def attack_power(self):
-        base = max(1, self.soldiers // 2)
+        base = max(1, self.soldiers // config.INFANTRY_ATTACK_POWER_DIVISOR)
         if self.is_overloaded:
-            base = max(1, int(base * (1 - self.overload_ratio * 0.5)))
+            base = max(1, int(base * (1 - self.overload_ratio * config.INFANTRY_OVERLOAD_ATTACK_PENALTY)))
         # Штраф за раненых бойцов
         wounded_penalty = self._get_wound_penalty()
         base = max(1, int(base * (1 - wounded_penalty)))
@@ -468,20 +468,20 @@ class Infantry(Unit):
     @property
     def hit_chance(self):
         base = config.INFANTRY_BASE_HIT_CHANCE
-        if self.morale < 30:
-            base -= 20
+        if self.morale < config.INFANTRY_LOW_MORALE_THRESHOLD:
+            base += config.INFANTRY_LOW_MORALE_HIT_PENALTY
         n = self.soldiers
         if n > self.NORMAL_SQUAD_SIZE:
-            base -= (n - self.NORMAL_SQUAD_SIZE) * 2
+            base -= (n - self.NORMAL_SQUAD_SIZE) * config.INFANTRY_OVERCROWD_HIT_PENALTY
         if self.is_overloaded:
-            base -= int(self.overload_ratio * 30)
+            base -= int(self.overload_ratio * config.INFANTRY_OVERLOAD_HIT_PENALTY_FACTOR)
         any_hungry = any(s.food <= 0 for s in self.alive_soldiers)
         if any_hungry:
-            base -= 15
+            base -= config.INFANTRY_HUNGRY_HIT_PENALTY
         # Штраф за раненых
         wound_penalty = self._get_wound_penalty()
-        base -= int(wound_penalty * 30)
-        return max(10, base)
+        base -= int(wound_penalty * config.INFANTRY_WOUND_HIT_PENALTY_FACTOR)
+        return max(config.INFANTRY_MIN_HIT_CHANCE, base)
 
     @property
     def effective_move_speed(self):
@@ -492,16 +492,16 @@ class Infantry(Unit):
 
     @property
     def camouflage(self):
-        base = 40
+        base = config.INFANTRY_BASE_CAMOUFLAGE
         n = self.soldiers
         if n > self.NORMAL_SQUAD_SIZE:
-            base -= (n - self.NORMAL_SQUAD_SIZE) * 5
+            base -= (n - self.NORMAL_SQUAD_SIZE) * config.INFANTRY_OVERCROWD_CAMOUFLAGE_PENALTY
         if self.game_map:
             cell = self.game_map.get_cell(self.x, self.y)
-            if cell.entrenchment > 50:
-                base += 10
+            if cell.entrenchment > config.ENTRENCH_CAMOUFLAGE_THRESHOLD:
+                base += config.ENTRENCH_CAMOUFLAGE_BONUS
         if self.is_overloaded:
-            base -= int(self.overload_ratio * 20)
+            base -= int(self.overload_ratio * config.INFANTRY_OVERLOAD_CAMOUFLAGE_PENALTY_FACTOR)
         return max(0, min(100, base))
 
     def get_movement_cost(self, terrain):
@@ -510,7 +510,7 @@ class Infantry(Unit):
     def entrench_step(self, game_map):
         cell = game_map.get_cell(self.x, self.y)
         if cell and cell.entrenchment < self.max_entrenchment:
-            cell.entrenchment = min(self.max_entrenchment, cell.entrenchment + 20)
+            cell.entrenchment = min(self.max_entrenchment, cell.entrenchment + config.ENTRENCH_STEP_AMOUNT)
 
     def consume_food(self, current_turn):
         for s in self.alive_soldiers:
@@ -565,7 +565,7 @@ class Infantry(Unit):
         n = self.soldiers
         if n > self.NORMAL_SQUAD_SIZE:
             overcrowd = n - self.NORMAL_SQUAD_SIZE
-            self.morale = max(0, self.morale - overcrowd)
+            self.morale = max(0, self.morale - overcrowd * config.INFANTRY_OVERCROWD_MORALE_PENALTY)
 
     def take_damage(self, amount, game_map=None):
         entrench = 0
@@ -573,8 +573,8 @@ class Infantry(Unit):
         if gm:
             cell = gm.get_cell(self.x, self.y)
             entrench = cell.entrenchment
-        absorbed = int(amount * entrench / 200)
-        absorbed += int(amount * config.TERRAIN_DEFENSE_BONUS.get(0, 0) / 200)
+        absorbed = int(amount * entrench / config.ENTRENCH_ABSORPTION_DIVISOR)
+        absorbed += int(amount * config.TERRAIN_DEFENSE_BONUS.get(0, 0) / config.ENTRENCH_ABSORPTION_DIVISOR)
         actual = max(1, amount - absorbed)
         alive = self.alive_soldiers
         to_kill = min(len(alive), actual)
@@ -590,7 +590,7 @@ class Infantry(Unit):
         if gm:
             cell = gm.get_cell(self.x, self.y)
             entrench = cell.entrenchment
-        absorbed = int(dmg * entrench / 200)
+        absorbed = int(dmg * entrench / config.ENTRENCH_ABSORPTION_DIVISOR)
         actual = max(1, dmg - absorbed)
         alive = self.alive_soldiers
         to_kill = min(len(alive), actual)
@@ -616,7 +616,7 @@ class Infantry(Unit):
         if gm:
             cell = gm.get_cell(target.x, target.y)
             entrench = cell.entrenchment
-        dmg = max(1, self.attack_power - entrench // 20)
+        dmg = max(1, self.attack_power - entrench // config.ENTRENCH_DAMAGE_REDUCTION_DIVISOR)
         target.take_damage(dmg, gm)
         return dmg, "Попадание"
 
@@ -783,8 +783,8 @@ class Tank(Unit):
         self.max_ammo = config.TANK_MAX_AMMO
         self.fuel = config.TANK_MAX_FUEL
         self.max_fuel = config.TANK_MAX_FUEL
-        self.carry_food = 100
-        self.max_carry_food = 200
+        self.carry_food = config.TANK_INIT_CARRY_FOOD
+        self.max_carry_food = config.TANK_MAX_CARRY_FOOD
         self.carry_ammo = 0
         self.max_carry_ammo = config.TANK_CARRY_CAPACITY
         self.color = (50, 50, 220) if faction == config.PLAYER else (180, 50, 50)
@@ -804,8 +804,8 @@ class Tank(Unit):
                 s.role = roles[i]
             else:
                 s.role = "Член экипажа"
-            s.food = 100
-            s.max_food = 200
+            s.food = config.TANK_CREW_FOOD
+            s.max_food = config.TANK_CREW_MAX_FOOD
             soldiers.append(s)
         return soldiers
 
@@ -822,8 +822,8 @@ class Tank(Unit):
             alive.pop()
         while len(alive) < value and len(alive) < self.max_crew:
             s = Soldier()
-            s.food = 100
-            s.max_food = 200
+            s.food = config.TANK_CREW_FOOD
+            s.max_food = config.TANK_CREW_MAX_FOOD
             alive.append(s)
         self.soldiers_list = alive + dead
 
@@ -873,7 +873,7 @@ class Tank(Unit):
 
     @property
     def attack_power(self):
-        return 3
+        return config.TANK_ATTACK_POWER
 
     @property
     def hit_chance(self):
@@ -882,7 +882,7 @@ class Tank(Unit):
     def get_movement_cost(self, terrain):
         cost = config.TERRAIN_MOVEMENT_COST.get(terrain, 1)
         if terrain == config.ROAD:
-            cost *= 0.5  # Бонус 50% для техники на дороге
+            cost *= config.VEHICLE_ROAD_BONUS  # Бонус для техники на дороге
         return cost
 
     def attack(self, target):
@@ -890,17 +890,17 @@ class Tank(Unit):
             return 0, "Нет снарядов"
         self.ammo -= 1
         if random.randint(1, 100) <= self.hit_chance:
-            if isinstance(target, Tank) and random.randint(1, 100) <= 30:
+            if isinstance(target, Tank) and random.randint(1, 100) <= config.TANK_VS_TANK_RICOCHET_CHANCE:
                 return 0, "Рикошет"
             dmg = self.attack_power
             if isinstance(target, Infantry):
-                dmg = min(target.soldiers, dmg + 2)
+                dmg = min(target.soldiers, dmg + config.TANK_VS_INFANTRY_BONUS_DAMAGE)
             target.take_damage(dmg)
             return dmg, "Попадание"
         return 0, "Промах"
 
     def take_damage(self, amount):
-        absorbed = min(amount, self.armor // 10)
+        absorbed = min(amount, self.armor // config.TANK_ARMOR_ABSORPTION_DIVISOR)
         actual = max(1, amount - absorbed)
         alive = self.alive_soldiers
         to_kill = min(len(alive), actual)
@@ -947,8 +947,8 @@ class Artillery(Unit):
                 s.role = roles[i]
             else:
                 s.role = "Член расчёта"
-            s.food = 100
-            s.max_food = 200
+            s.food = config.ARTILLERY_CREW_FOOD
+            s.max_food = config.ARTILLERY_CREW_MAX_FOOD
             soldiers.append(s)
         return soldiers
 
@@ -965,8 +965,8 @@ class Artillery(Unit):
             alive.pop()
         while len(alive) < value and len(alive) < self.max_crew:
             s = Soldier()
-            s.food = 100
-            s.max_food = 200
+            s.food = config.ARTILLERY_CREW_FOOD
+            s.max_food = config.ARTILLERY_CREW_MAX_FOOD
             alive.append(s)
         self.soldiers_list = alive + dead
 
@@ -1047,19 +1047,19 @@ class Artillery(Unit):
             self.attacked = False
             return 0, "Нет клетки", []
         
-        base_hit_chance = 80  # Поле / дорога
+        base_hit_chance = config.ARTILLERY_HIT_CHANCE_FIELD  # Поле / дорога
         if cell.terrain == config.FOREST:
-            base_hit_chance = 60
+            base_hit_chance = config.ARTILLERY_HIT_CHANCE_FOREST
         elif cell.terrain == config.CITY:
-            base_hit_chance = 40
+            base_hit_chance = config.ARTILLERY_HIT_CHANCE_CITY
         
         # Учитываем укрепления цели (только для пехоты с entrenchment)
         entrench_penalty = 0
         cell = game_map.get_cell(target_x, target_y)
         if cell:
-            entrench_penalty = cell.entrenchment // 2
+            entrench_penalty = cell.entrenchment // config.ARTILLERY_ENTRENCH_PENALTY_DIVISOR
         
-        hit_chance = max(10, base_hit_chance - entrench_penalty)
+        hit_chance = max(config.ARTILLERY_MIN_HIT_CHANCE, base_hit_chance - entrench_penalty)
         
         # Проверяем попадание
         roll = random.randint(1, 100)
@@ -1079,14 +1079,14 @@ class Artillery(Unit):
                 
                 # Модификаторы местности (урон)
                 if cell.terrain == config.FOREST:
-                    damage = int(damage * 0.7)
+                    damage = int(damage * config.ARTILLERY_DAMAGE_MOD_FOREST)
                 elif cell.terrain == config.CITY:
-                    damage = int(damage * 0.8)
+                    damage = int(damage * config.ARTILLERY_DAMAGE_MOD_CITY)
                 
                 # Модификатор укрепления (урон)
                 if game_map:
                     cell = game_map.get_cell(target_x, target_y)
-                    damage = int(damage * (1 - cell.entrenchment / 200))
+                    damage = int(damage * (1 - cell.entrenchment / config.ARTILLERY_ENTRENCH_DAMAGE_DIVISOR))
                 
                 damage = max(1, damage)
                 
@@ -1110,7 +1110,7 @@ class Artillery(Unit):
         if gm:
             cell = gm.get_cell(self.x, self.y)
             entrench = cell.entrenchment
-        absorbed = int(amount * entrench / 200)
+        absorbed = int(amount * entrench / config.ENTRENCH_ABSORPTION_DIVISOR)
         actual = max(1, amount - absorbed)
         alive = self.alive_soldiers
         to_kill = min(len(alive), actual)
@@ -1146,7 +1146,7 @@ class RadarEW(Unit):
         self.max_ammo = config.RADAR_EW_MAX_AMMO
         self.fuel = config.RADAR_EW_MAX_FUEL
         self.max_fuel = config.RADAR_EW_MAX_FUEL
-        self.morale = 100
+        self.morale = config.RADAR_EW_INIT_MORALE
         self.color = (200, 150, 50) if faction == config.PLAYER else (150, 50, 200)
         self.soldiers_list = self._generate_crew(config.RADAR_EW_INIT_CREW)
         self.min_crew = config.RADAR_EW_MIN_CREW
@@ -1167,8 +1167,8 @@ class RadarEW(Unit):
                 s.role = roles[i]
             else:
                 s.role = "Член расчёта"
-            s.food = 100
-            s.max_food = 200
+            s.food = config.RADAR_EW_CREW_FOOD
+            s.max_food = config.RADAR_EW_CREW_MAX_FOOD
             soldiers.append(s)
         return soldiers
 
@@ -1185,8 +1185,8 @@ class RadarEW(Unit):
             alive.pop()
         while len(alive) < value and len(alive) < self.max_crew:
             s = Soldier()
-            s.food = 100
-            s.max_food = 200
+            s.food = config.RADAR_EW_CREW_FOOD
+            s.max_food = config.RADAR_EW_CREW_MAX_FOOD
             alive.append(s)
         self.soldiers_list = alive + dead
 
@@ -1246,8 +1246,8 @@ class RadarEW(Unit):
             s.consume_food()
         if self.food <= 0:
             self.turns_without_food += 1
-            if self.turns_without_food >= 2:
-                self.morale = max(0, self.morale - 10)
+            if self.turns_without_food >= config.RADAR_EW_STARVATION_TURNS:
+                self.morale = max(0, self.morale + config.RADAR_EW_STARVATION_MORALE_PENALTY)
         else:
             self.turns_without_food = 0
         if self.active:
@@ -1296,7 +1296,7 @@ class ReconDrone(Unit):
         return config.DRONE_VISION_RANGE
 
     def get_movement_cost(self, terrain):
-        return 1  # Дрон летает - стоимость всегда 1
+        return config.RECON_DRONE_MOVE_COST  # Дрон летает - стоимость всегда 1
 
     def consume_battery(self):
         self.battery -= 1
@@ -1314,7 +1314,7 @@ class ReconDrone(Unit):
 
 
 class FPVDrone(Unit):
-    MAX_AGE = 10
+    MAX_AGE = config.FPV_DRONE_MAX_AGE
 
     def __init__(self, x, y, faction, target, name="FPV-дрон", operator=None):
         super().__init__(x, y, config.FPV_DRONE, faction, name)
@@ -1331,7 +1331,7 @@ class FPVDrone(Unit):
 
     @property
     def vision_range(self):
-        return 2
+        return config.FPV_DRONE_VISION_RANGE
 
     def get_movement_cost(self, terrain):
         return 1
@@ -1355,12 +1355,12 @@ class FPVDrone(Unit):
             cell = game_map.get_cell(x, y)
             if cell:
                 for unit in cell.units:
-                    if unit.is_alive and unit.is_jammer:
+                    if unit.is_alive and getattr(unit, 'is_jammer', False):
                         if isinstance(unit, RadarEW):
-                            penalty += 15
+                            penalty += config.EW_PENALTY_RADAR_EW
                         else:
-                            penalty += 10
-        return min(penalty, 50)
+                            penalty += config.EW_PENALTY_TANK_JAMMER
+        return min(penalty, config.EW_PENALTY_MAX)
 
     def move_toward_target(self, game_map):
         if not self.target or not self.target.is_alive or self.reached:
@@ -1425,7 +1425,7 @@ class FPVDrone(Unit):
             if cell:
                 for u in cell.units:
                     if isinstance(u, Infantry) and u.faction == target.faction and u.is_alive:
-                        shootdown_chance += config.FPV_INFANTRY_SHOOTDOWN_CHANCE * 0.5
+                        shootdown_chance += config.FPV_INFANTRY_SHOOTDOWN_CHANCE * config.FPV_SHOOTDOWN_MULTIPLIER_STACK
 
         if random.random() < shootdown_chance:
             self.shot_down = True
@@ -1476,7 +1476,7 @@ class FPVDrone(Unit):
             target.take_damage(dmg)
         else:
             target.die()
-            dmg = 99
+            dmg = config.FPV_KILL_DAMAGE_OTHER
 
         msg = f"FPV поразил {target.name}! Урон: {dmg}"
         combat_log.append({"message": msg, "damage": dmg})
@@ -1487,14 +1487,14 @@ class FPVDrone(Unit):
 class FPVOperator(Unit):
     def __init__(self, x, y, faction, name="FPV-расчёт"):
         super().__init__(x, y, config.FPV_OPERATOR, faction, name)
-        self.max_crew = 999
+        self.max_crew = config.FPV_OPERATOR_MAX_CREW
         self.fpv_stock = config.FPV_OPERATOR_MAX_STOCK
         self.max_stock = config.FPV_OPERATOR_MAX_STOCK
         self.food = config.FPV_OPERATOR_MAX_FOOD
         self.max_food = config.FPV_OPERATOR_MAX_FOOD
         self.ammo = config.FPV_OPERATOR_MAX_AMMO
         self.max_ammo = config.FPV_OPERATOR_MAX_AMMO
-        self.morale = 100
+        self.morale = config.FPV_OPERATOR_INIT_MORALE
         self.auto_mode = True
         self.color = (180, 50, 180) if faction == config.PLAYER else (180, 50, 180)
         self.min_crew = config.FPV_OPERATOR_MIN_CREW
@@ -1568,7 +1568,7 @@ class FPVOperator(Unit):
 
     @property
     def vision_range(self):
-        return 2
+        return config.FPV_OPERATOR_VISION_RANGE
 
     def take_damage(self, amount):
         self.die()
@@ -1578,7 +1578,7 @@ class FPVOperator(Unit):
             self.fpv_stock = min(self.max_stock, self.fpv_stock + 1)
         # Restore ammo when on warehouse
         if self.ammo < self.max_ammo:
-            self.ammo = min(self.max_ammo, self.ammo + 5)
+            self.ammo = min(self.max_ammo, self.ammo + config.FPV_OPERATOR_RELOAD_AMMO)
 
     def launch_fpv(self):
         if self.fpv_stock > 0:
@@ -1596,8 +1596,8 @@ class FPVOperator(Unit):
             s.consume_food()
         if self.food <= 0:
             self.turns_without_food += 1
-            if self.turns_without_food >= 2:
-                self.morale = max(0, self.morale - 10)
+            if self.turns_without_food >= config.FPV_OPERATOR_STARVATION_TURNS:
+                self.morale = max(0, self.morale + config.FPV_OPERATOR_STARVATION_MORALE_PENALTY)
         else:
             self.turns_without_food = 0
 
@@ -1639,8 +1639,8 @@ class SupplyTruck(Unit):
                 s.role = roles[i]
             else:
                 s.role = "Член экипажа"
-            s.food = 100
-            s.max_food = 100
+            s.food = config.TRUCK_CREW_FOOD
+            s.max_food = config.TRUCK_CREW_MAX_FOOD
             soldiers.append(s)
         return soldiers
 
@@ -1657,9 +1657,9 @@ class SupplyTruck(Unit):
         return len(self.alive_soldiers) < self.min_crew
 
     def add_soldier(self, soldier):
-        if len(self.alive_soldiers) < self.max_soldiers:
-            soldier.food = max(soldier.food, 100)
-            soldier.max_food = max(soldier.max_food, 100)
+        if len(self.alive_soldiers) < self.max_crew:
+            soldier.food = max(soldier.food, config.RADAR_EW_CREW_FOOD)
+            soldier.max_food = max(soldier.max_food, config.RADAR_EW_CREW_MAX_FOOD)
             self.soldiers_list.append(soldier)
             return True
         return False
@@ -1702,7 +1702,7 @@ class SupplyTruck(Unit):
     def get_movement_cost(self, terrain):
         cost = config.TERRAIN_MOVEMENT_COST.get(terrain, 1)
         if terrain == config.ROAD:
-            cost *= 0.5  # Бонус 50% для техники на дороге
+            cost *= config.VEHICLE_ROAD_BONUS  # Бонус для техники на дороге
         return cost
 
     def load_by_weight(self, cargo_type, amount):
@@ -1762,7 +1762,7 @@ class SupplyTruck(Unit):
         max_by_weight = self.weight_remaining // wpu
         if max_by_weight <= 0:
             return False
-        taken = min(max_by_weight, 5, warehouse.fpv_drones)
+        taken = min(max_by_weight, config.TRUCK_FPV_LOAD_LIMIT, warehouse.fpv_drones)
         warehouse.fpv_drones -= taken
         self.cargo[config.CARGO_FPV_DRONE] = self.cargo.get(config.CARGO_FPV_DRONE, 0) + taken
         return True
@@ -1812,16 +1812,16 @@ class Warehouse:
         self.y = y
         self.faction = faction
         self.name = name
-        self.supplies = 80
-        self.max_supplies = 200
-        self.ammo = 60
-        self.max_ammo = 150
-        self.fuel = 40
-        self.max_fuel = 100
-        self.batteries = 30
-        self.max_batteries = 80
-        self.fpv_drones = 5
-        self.recon_drones = 3
+        self.supplies = config.WAREHOUSE_INIT_SUPPLIES
+        self.max_supplies = config.WAREHOUSE_MAX_SUPPLIES
+        self.ammo = config.WAREHOUSE_INIT_AMMO
+        self.max_ammo = config.WAREHOUSE_MAX_AMMO
+        self.fuel = config.WAREHOUSE_INIT_FUEL
+        self.max_fuel = config.WAREHOUSE_MAX_FUEL
+        self.batteries = config.WAREHOUSE_INIT_BATTERIES
+        self.max_batteries = config.WAREHOUSE_MAX_BATTERIES
+        self.fpv_drones = config.WAREHOUSE_INIT_FPV_DRONES
+        self.recon_drones = config.WAREHOUSE_INIT_RECON_DRONES
         self.alive = True
         self.stationary_turns = 0
         self.moved = False
@@ -1831,7 +1831,7 @@ class Warehouse:
 
     @property
     def vision_range(self):
-        return 2
+        return config.WAREHOUSE_VISION_RANGE
 
     @property
     def is_alive(self):
@@ -1845,11 +1845,11 @@ class Warehouse:
         self.alive = False
 
     def reinforce(self):
-        self.supplies = min(self.max_supplies, self.supplies + 40)
-        self.ammo = min(self.max_ammo, self.ammo + 30)
-        self.fuel = min(self.max_fuel, self.fuel + 20)
-        self.batteries = min(self.max_batteries, self.batteries + 15)
-        self.recon_drones = min(5, self.recon_drones + 1)
+        self.supplies = min(self.max_supplies, self.supplies + config.WAREHOUSE_REINFORCE_SUPPLIES)
+        self.ammo = min(self.max_ammo, self.ammo + config.WAREHOUSE_REINFORCE_AMMO)
+        self.fuel = min(self.max_fuel, self.fuel + config.WAREHOUSE_REINFORCE_FUEL)
+        self.batteries = min(self.max_batteries, self.batteries + config.WAREHOUSE_REINFORCE_BATTERIES)
+        self.recon_drones = min(config.WAREHOUSE_MAX_RECON_DRONES, self.recon_drones + config.WAREHOUSE_REINFORCE_RECON_DRONES)
 
     def reset_turn(self):
         pass
@@ -1868,17 +1868,17 @@ class Warehouse:
 class ReconOperator(Unit):
     def __init__(self, x, y, faction, name="Оператор дронов"):
         super().__init__(x, y, "recon_operator", faction, name)
-        self.batteries = 30
-        self.max_batteries = 30
+        self.batteries = config.RECON_OP_INIT_BATTERIES
+        self.max_batteries = config.RECON_OP_MAX_BATTERIES
         self.food = config.RECON_OPERATOR_MAX_FOOD
         self.max_food = config.RECON_OPERATOR_MAX_FOOD
         self.ammo = config.RECON_OPERATOR_MAX_AMMO
         self.max_ammo = config.RECON_OPERATOR_MAX_AMMO
-        self.morale = 100
+        self.morale = config.RECON_OP_INIT_MORALE
         self.drone_slot = None
         self.drone = None
-        self.drone_stored = 1
-        self.max_drone_stored = 1
+        self.drone_stored = config.RECON_OP_DRONE_STORED
+        self.max_drone_stored = config.RECON_OP_MAX_STORED
         self.color = (50, 180, 200) if faction == config.PLAYER else (200, 100, 50)
         self.max_soldiers = config.RECON_OPERATOR_MAX_CREW
         self.min_crew = config.RECON_OPERATOR_MIN_CREW
@@ -1925,7 +1925,7 @@ class ReconOperator(Unit):
 
     @property
     def vision_range(self):
-        return 2
+        return config.RECON_OP_VISION_RANGE
 
     def take_damage(self, amount):
         self.die()
@@ -1973,8 +1973,8 @@ class ReconOperator(Unit):
             s.consume_food()
         if self.food <= 0:
             self.turns_without_food += 1
-            if self.turns_without_food >= 2:
-                self.morale = max(0, self.morale - 10)
+            if self.turns_without_food >= config.RECON_OP_STARVATION_TURNS:
+                self.morale = max(0, self.morale + config.RECON_OP_STARVATION_MORALE_PENALTY)
         else:
             self.turns_without_food = 0
 
@@ -2055,14 +2055,14 @@ class SupplyCache:
         self.faction = faction
         self.name = name
         self.supplies = 0
-        self.max_supplies = 200
+        self.max_supplies = config.CACHE_MAX_SUPPLIES
         self.ammo = 0
-        self.max_ammo = 100
+        self.max_ammo = config.CACHE_MAX_AMMO
         self.fuel = 0
-        self.max_fuel = 60
+        self.max_fuel = config.CACHE_MAX_FUEL
         self.batteries = 0
-        self.max_batteries = 30
-        self.max_slots = 30
+        self.max_batteries = config.CACHE_MAX_BATTERIES
+        self.max_slots = config.CACHE_MAX_SLOTS
         self.fpv_drones = 0
         self.recon_drones = 0
         self.alive = True
@@ -2070,14 +2070,14 @@ class SupplyCache:
         self.attacked = False
         self.stationary_turns = 0
         self.build_turns = 0
-        self.build_required = 5
+        self.build_required = config.CACHE_BUILD_TURNS
         self.color = (150, 120, 60) if faction == config.PLAYER else (180, 100, 50)
         self.garrison = 0
         self.reserve_soldiers = []
 
     @property
     def vision_range(self):
-        return 1
+        return config.CACHE_VISION_RANGE
 
     @property
     def is_alive(self):

@@ -57,7 +57,7 @@ def resolve_infantry_vs_infantry(attacker, defender, game_map=None):
             break
     
     # Определяем количество выстрелов (зависит от численности)
-    num_shots = min(len(attacker.alive_soldiers), 3)
+    num_shots = min(len(attacker.alive_soldiers), config.COMBAT_MAX_SHOTS_PER_ENGAGEMENT)
     hits = []
     total_damage = 0
     wounds_inflicted = 0
@@ -69,13 +69,13 @@ def resolve_infantry_vs_infantry(attacker, defender, game_map=None):
             # Учитываем укрепление клетки защитника
             if game_map:
                 def_cell = game_map.get_cell(defender.x, defender.y)
-                dmg = max(1, dmg - def_cell.entrenchment // 30)
+                dmg = max(1, dmg - def_cell.entrenchment // config.COMBAT_ENTRENCH_REDUCTION_DIVISOR)
             
             # Наносим урон случайному солдату
             alive = defender.alive_soldiers
             if alive:
                 target_soldier = random.choice(alive)
-                target_soldier.take_damage(dmg * 20)  # Урон в процентах здоровья
+                target_soldier.take_damage(dmg * config.COMBAT_DAMAGE_TO_HEALTH_MULTIPLIER)  # Урон в процентах здоровья
                 
                 # Определяем уровень ранения
                 if target_soldier.wound_level > WOUND_NONE:
@@ -101,16 +101,16 @@ def resolve_infantry_vs_infantry(attacker, defender, game_map=None):
                 break
         
         if random.randint(1, 100) <= defender.hit_chance:
-            counter_dmg = max(1, defender.attack_power // 2)
+            counter_dmg = max(1, defender.attack_power // config.COMBAT_COUNTER_ATTACK_DIVISOR)
             # Учитываем укрепление клетки атакующего
             if game_map:
                 atk_cell = game_map.get_cell(attacker.x, attacker.y)
-                counter_dmg = max(1, counter_dmg - atk_cell.entrenchment // 30)
+                counter_dmg = max(1, counter_dmg - atk_cell.entrenchment // config.COMBAT_ENTRENCH_REDUCTION_DIVISOR)
             
             alive = attacker.alive_soldiers
             if alive:
                 target = random.choice(alive)
-                target.take_damage(counter_dmg * 20)
+                target.take_damage(counter_dmg * config.COMBAT_DAMAGE_TO_HEALTH_MULTIPLIER)
                 counter_damage = counter_dmg
                 
                 hits.append({
@@ -170,7 +170,7 @@ def resolve_tank_vs_tank(attacker, defender):
     # Выстрел атакующего
     if random.randint(1, 100) <= attacker.hit_chance:
         # Проверка на рикошет (30% шанс для танка против танка)
-        if random.randint(1, 100) <= 30:
+        if random.randint(1, 100) <= config.COMBAT_TANK_RICOCHET_CHANCE:
             ricochet = True
             hits.append({
                 "x": defender.x + random.uniform(-0.2, 0.2),
@@ -182,7 +182,7 @@ def resolve_tank_vs_tank(attacker, defender):
             # Пробитие брони
             dmg = attacker.attack_power
             # Учитываем броню защитника
-            armor_absorb = min(dmg, defender.armor // 15)
+            armor_absorb = min(dmg, defender.armor // config.COMBAT_TANK_ARMOR_ABSORB_DIVISOR)
             actual_dmg = max(1, dmg - armor_absorb)
             
             defender.take_damage(actual_dmg)
@@ -196,11 +196,11 @@ def resolve_tank_vs_tank(attacker, defender):
             })
             
             # Урон экипажу
-            if random.randint(1, 100) <= 40:
+            if random.randint(1, 100) <= config.COMBAT_TANK_CREW_DAMAGE_CHANCE:
                 crew_alive = defender.alive_soldiers
                 if crew_alive:
                     crew_target = random.choice(crew_alive)
-                    crew_damage = random.randint(10, 30)
+                    crew_damage = random.randint(config.COMBAT_TANK_CREW_DAMAGE_MIN, config.COMBAT_TANK_CREW_DAMAGE_MAX)
                     crew_target.take_damage(crew_damage)
                     hits[-1]["crew_damage"] = crew_damage
     else:
@@ -215,7 +215,7 @@ def resolve_tank_vs_tank(attacker, defender):
     if defender.is_alive and defender.ammo > 0:
         defender.ammo -= 1
         if random.randint(1, 100) <= defender.hit_chance:
-            if random.randint(1, 100) <= 30:
+            if random.randint(1, 100) <= config.COMBAT_TANK_DEFENDER_RICOCHET_CHANCE:
                 # Рикошет защитника
                 hits.append({
                     "x": attacker.x + random.uniform(-0.2, 0.2),
@@ -226,7 +226,7 @@ def resolve_tank_vs_tank(attacker, defender):
                 })
             else:
                 counter_dmg = defender.attack_power
-                armor_absorb = min(counter_dmg, attacker.armor // 15)
+                armor_absorb = min(counter_dmg, attacker.armor // config.COMBAT_TANK_COUNTER_ARMOR_DIVISOR)
                 actual_counter = max(1, counter_dmg - armor_absorb)
                 
                 attacker.take_damage(actual_counter)
@@ -284,7 +284,7 @@ def resolve_tank_vs_infantry(attacker, defender):
     total_damage = 0
     
     # Танк стреляет картечью по пехоте
-    num_targets = min(len(defender.alive_soldiers), attacker.attack_power + 2)
+    num_targets = min(len(defender.alive_soldiers), attacker.attack_power + config.COMBAT_TANK_VS_INF_BONUS_TARGETS)
     
     if random.randint(1, 100) <= attacker.hit_chance:
         for _ in range(num_targets):
@@ -294,7 +294,7 @@ def resolve_tank_vs_infantry(attacker, defender):
             
             target = random.choice(alive)
             # Урон от картечи
-            damage = random.randint(15, 40)
+            damage = random.randint(config.COMBAT_SHRAPNEL_DAMAGE_MIN, config.COMBAT_SHRAPNEL_DAMAGE_MAX)
             target.take_damage(damage)
             total_damage += 1
             
@@ -343,7 +343,7 @@ def resolve_infantry_vs_tank(attacker, defender, game_map=None):
         }
     
     # Пехота тратит больше патронов на борьбу с танком
-    ammo_cost = min(3, len([s for s in attacker.alive_soldiers if s.ammo > 0]))
+    ammo_cost = min(config.COMBAT_INF_VS_TANK_AMMO_COST, len([s for s in attacker.alive_soldiers if s.ammo > 0]))
     for _ in range(ammo_cost):
         for s in attacker.alive_soldiers:
             if s.ammo > 0:
@@ -354,7 +354,7 @@ def resolve_infantry_vs_tank(attacker, defender, game_map=None):
     total_damage = 0
     
     # Шанс попадания из гранатомёта (30%)
-    if random.randint(1, 100) <= 30:
+    if random.randint(1, 100) <= config.COMBAT_GRENADE_HIT_CHANCE:
         dmg = 1
         if isinstance(defender, Infantry):
             defender.take_damage(dmg, game_map)
@@ -390,7 +390,7 @@ def resolve_infantry_vs_tank(attacker, defender, game_map=None):
                 for _ in range(num_kill):
                     if alive:
                         target = random.choice(alive)
-                        target.take_damage(100)  # Убивает солдата
+                        target.take_damage(config.COMBAT_TANK_KILL_DAMAGE)  # Убивает солдата
                         counter_damage += 1
                         alive.remove(target)
                         
@@ -422,7 +422,7 @@ def resolve_vs_structure(attacker, defender):
     """Атака на строение (склад/погреб)"""
     if not attacker.is_alive or not defender.is_alive:
         return None
-    dmg = attacker.attack_power if hasattr(attacker, 'attack_power') else 3
+    dmg = attacker.attack_power if hasattr(attacker, 'attack_power') else config.COMBAT_DEFAULT_ATTACK_POWER
     defender.die()
     return {
         "attacker": attacker,
@@ -501,7 +501,7 @@ def resolve_fpv_strike(drone, target, warehouse, game_map=None):
         target.take_damage(dmg)
     else:
         target.die()
-        dmg = 99
+        dmg = config.COMBAT_FPV_KILL_DAMAGE
 
     return {
         "drone": drone,

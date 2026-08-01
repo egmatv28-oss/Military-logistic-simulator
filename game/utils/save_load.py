@@ -115,6 +115,12 @@ class SaveLoadSystem:
         game.turn = game_state.get('turn', 0)
         game.phase = game_state.get('phase', 0)
         
+        # Восстановить карту (если есть данные в сохранении)
+        map_data = game_state.get('map_data')
+        if map_data and 'cells' in map_data:
+            from ..map_ import GameMap
+            game.map = GameMap.restore(map_data)
+        
         # Очистить текущие юниты
         game.all_units.clear()
         game.player_units.clear()
@@ -154,8 +160,16 @@ class SaveLoadSystem:
             
             # Восстановить атрибуты
             for key, value in data.items():
-                if hasattr(unit, key):
+                if not hasattr(unit, key):
+                    continue
+                # Пропускаем свойства без сеттера (например, Infantry.soldiers)
+                descriptor = getattr(type(unit), key, None)
+                if isinstance(descriptor, property) and descriptor.fset is None:
+                    continue
+                try:
                     setattr(unit, key, value)
+                except (AttributeError, TypeError):
+                    continue
             
             game.all_units.append(unit)
             if unit.faction == 0:  # PLAYER

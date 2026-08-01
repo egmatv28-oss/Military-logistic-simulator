@@ -196,7 +196,7 @@ class SupplyLogistics:
             g.deliver_target_mode = None
             return
         avoid = [u for u in g.player_units if u is not truck and u.is_alive and not isinstance(u, (ReconDrone, FPVDrone))]
-        path = g.map.find_path(truck.x, truck.y, tx, ty, max_cost=99, unit=truck, avoid_units=avoid)
+        path = g.map.find_path(truck.x, truck.y, tx, ty, max_cost=config.PATHFIND_MAX_COST, unit=truck, avoid_units=avoid)
         if path and len(path) >= 2:
             g.waypoints[truck] = path[1:]
             truck._delivery_target = target
@@ -266,7 +266,7 @@ class SupplyLogistics:
         if max_by_weight <= 0:
             g.message = f"Грузовик полон (вес {truck.total_weight}/{truck.max_weight})"
             return
-        taken = min(max_by_weight, 10, available)
+        taken = min(max_by_weight, config.TRUCK_MANUAL_LOAD_LIMIT, available)
         truck.cargo[load_type] = truck.cargo.get(load_type, 0) + taken
         setattr(wh, wh_attr, getattr(wh, wh_attr) - taken)
         g.message = f"Загружено {taken} {config.CARGO_NAMES.get(load_type, load_type).lower()} (вес {taken*wpu}кг)"
@@ -556,7 +556,7 @@ class SupplyLogistics:
                 available = getattr(origin, wh_attr, 0)
                 if available <= 0:
                     continue
-                want = min(10, available)
+                want = min(config.TRUCK_AUTO_LOAD_LIMIT, available)
                 taken = truck.load_by_weight(ct, want)
                 if taken > 0:
                     setattr(origin, wh_attr, getattr(origin, wh_attr, 0) - taken)
@@ -620,11 +620,11 @@ class SupplyLogistics:
                     best_dist = dist
                     best = (nx, ny)
             if best:
-                path = g.map.find_path(truck.x, truck.y, best[0], best[1], max_cost=99, unit=truck, avoid_units=avoid)
+                path = g.map.find_path(truck.x, truck.y, best[0], best[1], max_cost=config.PATHFIND_MAX_COST, unit=truck, avoid_units=avoid)
                 if path and len(path) >= 2:
                     g.waypoints[truck] = path[1:]
                     return
-        path = g.map.find_path(truck.x, truck.y, tx, ty, max_cost=99, unit=truck, avoid_units=avoid)
+        path = g.map.find_path(truck.x, truck.y, tx, ty, max_cost=config.PATHFIND_MAX_COST, unit=truck, avoid_units=avoid)
         if path and len(path) >= 2:
             g.waypoints[truck] = path[1:]
 
@@ -636,7 +636,7 @@ class SupplyLogistics:
             available = getattr(source, ct, 0)
             if available <= 0:
                 continue
-            max_take = min(available, 20)
+            max_take = min(available, config.TRUCK_TRANSFER_TO_LIMIT)
             taken = truck.load_by_weight(ct, max_take)
             if taken > 0:
                 setattr(source, ct, getattr(source, ct, 0) - taken)
@@ -651,7 +651,7 @@ class SupplyLogistics:
             available = truck.cargo.get(ct, 0)
             if available <= 0:
                 continue
-            max_give = min(available, 20, getattr(dest, f"max_{ct}", 999999) - getattr(dest, ct, 0))
+            max_give = min(available, config.TRUCK_TRANSFER_FROM_LIMIT, getattr(dest, f"max_{ct}", 999999) - getattr(dest, ct, 0))
             if max_give > 0:
                 truck.cargo[ct] -= max_give
                 setattr(dest, ct, getattr(dest, ct, 0) + max_give)
@@ -675,7 +675,7 @@ class SupplyLogistics:
             avoid = []
         else:
             avoid = [u for u in g.player_units if u is not unit and u.is_alive and not isinstance(u, (ReconDrone, FPVDrone))]
-        path = g.map.find_path(unit.x, unit.y, tx, ty, max_cost=99, unit=unit, avoid_units=avoid)
+        path = g.map.find_path(unit.x, unit.y, tx, ty, max_cost=config.PATHFIND_MAX_COST, unit=unit, avoid_units=avoid)
         if not path or len(path) < 2:
             g.message = "Нет пути"
             return False
@@ -791,7 +791,7 @@ class SupplyLogistics:
             if isinstance(unit, ReconDrone):
                 unit.consume_battery()
             if isinstance(unit, SoldierUnit):
-                unit.soldier.morale = max(0, unit.soldier.morale - 3)
+                unit.soldier.morale = max(0, unit.soldier.morale - config.WAYPOINT_MARCH_MORALE_PENALTY)
                 if unit.soldier.morale <= 0:
                     unit.die()
                     g.map.remove_unit(unit)
